@@ -5,6 +5,10 @@ import { ApiError } from "../utils/apiError.js";
 import { ApiResponse } from "../utils/apiResponse.js";
 import { asyncHandler } from "../utils/asyncHandler.js";
 
+const escapeRegex = (string) => {
+  return string.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+};
+
 const fallbackProducts = [
   {
     _id: "64f2b1a2b3c4d5e6f7a8b001",
@@ -112,10 +116,18 @@ export const getProducts = asyncHandler(async (req, res) => {
     limit = 20,
     category,
     search,
+    q,
     minPrice,
     maxPrice,
+    minRating,
+    inStock,
     sort = "newest",
   } = req.query;
+
+  const rawSearch = search || q;
+  if (rawSearch && rawSearch.length > 100) {
+    throw new ApiError(400, "Search query must not exceed 100 characters");
+  }
 
   const pageNum = Math.max(1, parseInt(page, 10) || 1);
   const limitNum = Math.min(50, Math.max(1, parseInt(limit, 10) || 20));
@@ -133,8 +145,9 @@ export const getProducts = asyncHandler(async (req, res) => {
       }
     }
 
-    if (search && search.trim()) {
-      const searchRegex = new RegExp(search.trim(), "i");
+    if (rawSearch && rawSearch.trim()) {
+      const sanitized = escapeRegex(rawSearch.trim());
+      const searchRegex = new RegExp(sanitized, "i");
       filter.$or = [
         { productName: searchRegex },
         { description: searchRegex },
@@ -150,6 +163,14 @@ export const getProducts = asyncHandler(async (req, res) => {
       if (maxPrice !== undefined && !isNaN(parseFloat(maxPrice))) {
         filter.price.$lte = parseFloat(maxPrice);
       }
+    }
+
+    if (minRating !== undefined && !isNaN(parseFloat(minRating))) {
+      filter.productRating = { $gte: parseFloat(minRating) };
+    }
+
+    if (inStock === "true" || inStock === true || inStock === "1") {
+      filter.stock = { $gt: 0 };
     }
 
     let sortOption = { createdAt: -1 };
@@ -182,8 +203,8 @@ export const getProducts = asyncHandler(async (req, res) => {
       );
     }
 
-    if (search && search.trim()) {
-      const term = search.trim().toLowerCase();
+    if (rawSearch && rawSearch.trim()) {
+      const term = rawSearch.trim().toLowerCase();
       filtered = filtered.filter(
         (p) =>
           p.productName.toLowerCase().includes(term) ||
@@ -197,6 +218,14 @@ export const getProducts = asyncHandler(async (req, res) => {
     }
     if (maxPrice !== undefined && !isNaN(parseFloat(maxPrice))) {
       filtered = filtered.filter((p) => p.price <= parseFloat(maxPrice));
+    }
+
+    if (minRating !== undefined && !isNaN(parseFloat(minRating))) {
+      filtered = filtered.filter((p) => p.productRating >= parseFloat(minRating));
+    }
+
+    if (inStock === "true" || inStock === true || inStock === "1") {
+      filtered = filtered.filter((p) => p.stock > 0);
     }
 
     if (sort === "price_asc") {
@@ -256,6 +285,71 @@ export const getProducts = asyncHandler(async (req, res) => {
   );
 });
 
+export const getProductSuggestions = asyncHandler(async (req, res) => {
+  const query = req.query.q || req.query.search || "";
+
+  if (!query || !query.trim()) {
+    return res
+      .status(200)
+      .json(new ApiResponse(200, { query: "", suggestions: [] }, "Empty query"));
+  }
+
+  const trimmedQuery = query.trim();
+  if (trimmedQuery.length > 100) {
+    throw new ApiError(400, "Search query must not exceed 100 characters");
+  }
+
+  const sanitized = escapeRegex(trimmedQuery);
+  const regex = new RegExp(sanitized, "i");
+  const suggestions = [];
+
+  if (mongoose.connection.readyState === 1) {
+    const [matchingProducts, matchingCategories] = await Promise.all([
+      Product.find({ productName: regex }).select("productName _id").limit(4).lean(),
+      Category.find({ name: regex }).select("name _id").limit(2).lean(),
+    ]);
+
+    for (const p of matchingProducts) {
+      suggestions.push({
+        id: p._id,
+        text: p.productName,
+        type: "product",
+      });
+    }
+
+    for (const c of matchingCategories) {
+      suggestions.push({
+        id: c._id,
+        text: c.name,
+        type: "category",
+      });
+    }
+  } else {
+    // Fallback in-memory suggestions
+    for (const p of fallbackProducts) {
+      if (p.productName.toLowerCase().includes(trimmedQuery.toLowerCase())) {
+        suggestions.push({
+          id: p._id,
+          text: p.productName,
+          type: "product",
+        });
+        if (suggestions.length >= 4) break;
+      }
+    }
+  }
+
+  return res.status(200).json(
+    new ApiResponse(
+      200,
+      {
+        query: trimmedQuery,
+        suggestions,
+      },
+      "Suggestions retrieved successfully"
+    )
+  );
+});
+
 export const getProductById = asyncHandler(async (req, res) => {
   const { id } = req.params;
 
@@ -270,7 +364,8 @@ export const getProductById = asyncHandler(async (req, res) => {
       .populate("category", "name")
       .lean();
   } else {
-    product = fallbackProducts.find((p) => p._id.toString() === id.toString()) || null;
+    product =
+      fallbackProducts.find((p) => p._id.toString() === id.toString()) || null;
   }
 
   if (!product) {
