@@ -3,6 +3,8 @@ import { ApiResponse } from "../utils/apiResponse.js";
 import authRouter from "./auth.routes.js";
 import categoryRouter from "./category.routes.js";
 import productRouter from "./product.routes.js";
+import cartRouter from "./cart.routes.js";
+import wishlistRouter from "./wishlist.routes.js";
 import {
   registerUser,
   loginUser,
@@ -34,6 +36,10 @@ router.use("/auth", authRouter);
 // Product Catalog & Categories modules
 router.use("/categories", categoryRouter);
 router.use("/products", productRouter);
+
+// Cart & Wishlist modules
+router.use("/cart", cartRouter);
+router.use("/wishlist", wishlistRouter);
 
 // Backwards-compatibility aliases for legacy client endpoints
 router.post("/signUp", registerUser);
