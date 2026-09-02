@@ -1,6 +1,8 @@
 import { Router } from "express";
 import { ApiResponse } from "../utils/apiResponse.js";
 import authRouter from "./auth.routes.js";
+import categoryRouter from "./category.routes.js";
+import productRouter from "./product.routes.js";
 import {
   registerUser,
   loginUser,
@@ -28,6 +30,10 @@ router.get("/health", (req, res) => {
 
 // Authentication module
 router.use("/auth", authRouter);
+
+// Product Catalog & Categories modules
+router.use("/categories", categoryRouter);
+router.use("/products", productRouter);
 
 // Backwards-compatibility aliases for legacy client endpoints
 router.post("/signUp", registerUser);
