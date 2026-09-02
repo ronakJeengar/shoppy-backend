@@ -20,12 +20,11 @@ const userSchema = new Schema(
     fullName: {
       type: String,
       required: true,
-      lowercase: true,
       trim: true,
     },
     avatar: {
-      type: String, //cloudnary
-      required: true,
+      type: String,
+      default: "",
       trim: true,
     },
     recentlyViewed: [
@@ -36,7 +35,7 @@ const userSchema = new Schema(
     ],
     password: {
       type: String,
-      required: [true, "Password is Requrired"],
+      required: [true, "Password is Required"],
     },
     refreshToken: {
       type: String,
@@ -72,9 +71,9 @@ userSchema.methods.generateAccessToken = function () {
       fullName: this.fullName,
       role: this.role,
     },
-    process.env.ACCESS_TOKEN_KEY,
+    process.env.ACCESS_TOKEN_KEY || "shoppy_access_token_secret_key_development_example",
     {
-      expiresIn: process.env.ACCESS_TOKEN_EXPIRY,
+      expiresIn: process.env.ACCESS_TOKEN_EXPIRY || "1d",
     }
   );
 };
@@ -84,9 +83,9 @@ userSchema.methods.generateRefreshToken = function () {
     {
       _id: this._id,
     },
-    process.env.ACCESS_REFRESH_KEY,
+    process.env.ACCESS_REFRESH_KEY || "shoppy_refresh_token_secret_key_development_example",
     {
-      expiresIn: process.env.ACCESS_REFRESH_EXPIRY,
+      expiresIn: process.env.ACCESS_REFRESH_EXPIRY || "7d",
     }
   );
 };

@@ -1,5 +1,12 @@
 import { Router } from "express";
 import { ApiResponse } from "../utils/apiResponse.js";
+import authRouter from "./auth.routes.js";
+import {
+  registerUser,
+  loginUser,
+  getCurrentUser,
+} from "../controllers/auth.controller.js";
+import { verifyJWT } from "../middlewares/auth.middleware.js";
 
 const router = Router();
 
@@ -18,5 +25,13 @@ router.get("/health", (req, res) => {
     )
   );
 });
+
+// Authentication module
+router.use("/auth", authRouter);
+
+// Backwards-compatibility aliases for legacy client endpoints
+router.post("/signUp", registerUser);
+router.post("/signIn", loginUser);
+router.get("/currentUser", verifyJWT, getCurrentUser);
 
 export default router;
