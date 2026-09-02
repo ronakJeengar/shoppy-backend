@@ -13,13 +13,14 @@ const orderItemSchema = new Schema({
 
 const orderSchema = new Schema(
   {
-    orderprice: {
+    orderPrice: {
       type: Number,
       required: true,
     },
     customer: {
       type: Schema.Types.ObjectId,
       ref: "User",
+      required: true,
     },
     orderItems: [orderItemSchema],
     address: {
@@ -28,7 +29,7 @@ const orderSchema = new Schema(
     },
     status: {
       type: String,
-      enum: ["PENDING", "CANCELED", "DELIVERED"],
+      enum: ["PENDING", "CONFIRMED", "PROCESSING", "SHIPPED", "DELIVERED", "CANCELED"],
       default: "PENDING",
     },
   },
@@ -37,4 +38,4 @@ const orderSchema = new Schema(
   }
 );
 
-export const Order = mongoose.Schema("Order", orderSchema);
+export const Order = mongoose.model("Order", orderSchema);

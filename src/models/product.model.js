@@ -7,12 +7,12 @@ const productSchema = new Schema(
       type: String, //cloudnary
       required: true,
     },
-    prodcutName: {
+    productName: {
       type: String,
       required: true,
       trim: true,
     },
-    sellername: {
+    sellerName: {
       type: String,
       required: true,
       trim: true,
@@ -25,7 +25,6 @@ const productSchema = new Schema(
       type: Number,
       default: 0,
       required: true,
-      trim: true,
     },
     stock: {
       type: Number,
@@ -33,7 +32,7 @@ const productSchema = new Schema(
     },
     productRating: {
       type: Number,
-      required: true,
+      default: 0,
     },
     category: {
       type: Schema.Types.ObjectId,
@@ -48,4 +47,4 @@ const productSchema = new Schema(
 
 productSchema.plugin(mongooseAggregatePaginate);
 
-export const User = mongoose.Schema("Product", productSchema);
+export const Product = mongoose.model("Product", productSchema);

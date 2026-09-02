@@ -1,64 +1,28 @@
-// require('dotenv').config({path : './env'})
+import "./utils/nodePolyfill.js";
 import dotenv from "dotenv";
 import connectDB from "./db/dbconnect.js";
 import app from "./app.js";
+
+dotenv.config();
+
 const port = process.env.PORT || 8000;
 
-dotenv.config({
-    path : './env'
-})
-
-connectDB().then(() => {
-
+connectDB()
+  .then(() => {
     app.on("error", (error) => {
-        console.log(`error is :- ${error}`);
-     });
-
+      console.error(`Server runtime error: ${error}`);
+    });
 
     app.listen(port, () => {
-        console.log("Server is running at port ", port);
+      console.log(`Shoppy backend server running at port ${port}`);
     });
-}
-
-).catch((error) => {
-    console.log("MongoDB connection failed ", error);
-})
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-/*
-import express from "express";
-const app = express();
-
-( async () => {
-    try{
-
-        await mongoose.connect(`${process.env.MONGODB_URL}/${DB_NAME}`);
-
-        app.on("error", (error) => {
-            console.log("error is :- ", error);
-            throw error
-        });
-
-        app.listen(process.env.PORT, () => {
-            console.log(`app is listening at port ${process.env.PORT}`);
-        });
-
-    } catch (error){
-        console.log('error :- ', error);
+  })
+  .catch((error) => {
+    console.error("MongoDB connection failed:", error.message || error);
+    // In dev without MongoDB running, keep app process alive for HTTP routing/tests
+    if (process.env.NODE_ENV !== "production") {
+      app.listen(port, () => {
+        console.log(`Server running in offline-DB mode on port ${port}`);
+      });
     }
-})()
-*/
+  });
