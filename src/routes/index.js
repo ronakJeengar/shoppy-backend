@@ -9,6 +9,7 @@ import addressRouter from "./address.routes.js";
 import checkoutRouter from "./checkout.routes.js";
 import paymentRouter from "./payment.routes.js";
 import orderRouter from "./order.routes.js";
+import notificationRouter from "./notification.routes.js";
 import {
   registerUser,
   loginUser,
@@ -50,6 +51,7 @@ router.use("/addresses", addressRouter);
 router.use("/checkout", checkoutRouter);
 router.use("/payments", paymentRouter);
 router.use("/orders", orderRouter);
+router.use("/notifications", notificationRouter);
 
 // Backwards-compatibility aliases for legacy client endpoints
 router.post("/signUp", registerUser);

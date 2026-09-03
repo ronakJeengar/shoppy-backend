@@ -403,15 +403,36 @@ export const refreshAccessToken = asyncHandler(async (req, res) => {
 });
 
 export const getCurrentUser = asyncHandler(async (req, res) => {
+  const userId = req.user._id?.toString() || req.user.id?.toString();
+  let userRecord = req.user;
+
+  if (mongoose.connection.readyState === 1) {
+    const dbUser = await User.findById(req.user._id);
+    if (dbUser) userRecord = dbUser;
+  } else {
+    for (const u of inMemoryUsers.values()) {
+      if (u._id?.toString() === userId) {
+        userRecord = u;
+        break;
+      }
+    }
+  }
+
   const safeUser = {
-    id: req.user._id,
-    _id: req.user._id,
-    name: req.user.fullName || req.user.name,
-    fullName: req.user.fullName || req.user.name,
-    username: req.user.username || "",
-    email: req.user.email,
-    role: req.user.role || "CUSTOMER",
-    avatar: req.user.avatar || "",
+    id: userRecord._id || userId,
+    _id: userRecord._id || userId,
+    name: userRecord.fullName || userRecord.name,
+    fullName: userRecord.fullName || userRecord.name,
+    username: userRecord.username || "",
+    email: userRecord.email,
+    role: userRecord.role || "CUSTOMER",
+    avatar: userRecord.avatar || "",
+    phone: userRecord.phone || "",
+    notificationPreferences: userRecord.notificationPreferences || {
+      orderUpdates: true,
+      promotions: true,
+      wishlistAlerts: true,
+    },
   };
 
   return res
@@ -420,3 +441,198 @@ export const getCurrentUser = asyncHandler(async (req, res) => {
       new ApiResponse(200, safeUser, "Current user retrieved successfully")
     );
 });
+
+export const updateProfile = asyncHandler(async (req, res) => {
+  const userId = req.user._id?.toString() || req.user.id?.toString();
+  const { name, fullName, phone, avatar } = req.body;
+
+  const displayName = fullName || name;
+  if (displayName !== undefined && !displayName.trim()) {
+    throw new ApiError(400, "Full name cannot be empty");
+  }
+
+  if (mongoose.connection.readyState === 1) {
+    const user = await User.findById(req.user._id);
+    if (!user) {
+      throw new ApiError(404, "User not found");
+    }
+
+    if (displayName !== undefined) user.fullName = displayName.trim();
+    if (phone !== undefined) user.phone = phone.trim();
+    if (avatar !== undefined) user.avatar = avatar.trim();
+
+    await user.save({ validateBeforeSave: false });
+
+    const safeUser = {
+      id: user._id,
+      _id: user._id,
+      name: user.fullName,
+      fullName: user.fullName,
+      username: user.username,
+      email: user.email,
+      role: user.role,
+      avatar: user.avatar,
+      phone: user.phone || "",
+      notificationPreferences: user.notificationPreferences || {
+        orderUpdates: true,
+        promotions: true,
+        wishlistAlerts: true,
+      },
+    };
+
+    return res
+      .status(200)
+      .json(new ApiResponse(200, safeUser, "Profile updated successfully"));
+  }
+
+  // Offline fallback
+  let offlineUser = null;
+  for (const u of inMemoryUsers.values()) {
+    if (u._id?.toString() === userId) {
+      offlineUser = u;
+      break;
+    }
+  }
+
+  if (!offlineUser) {
+    offlineUser = {
+      _id: userId,
+      id: userId,
+      fullName: req.user.fullName || "User",
+      email: req.user.email,
+      username: req.user.username || "",
+      role: req.user.role || "CUSTOMER",
+      avatar: "",
+      phone: "",
+    };
+    inMemoryUsers.set(userId, offlineUser);
+  }
+
+  if (displayName !== undefined) offlineUser.fullName = displayName.trim();
+  if (phone !== undefined) offlineUser.phone = phone.trim();
+  if (avatar !== undefined) offlineUser.avatar = avatar.trim();
+
+  const safeUser = {
+    id: offlineUser._id,
+    _id: offlineUser._id,
+    name: offlineUser.fullName,
+    fullName: offlineUser.fullName,
+    username: offlineUser.username,
+    email: offlineUser.email,
+    role: offlineUser.role,
+    avatar: offlineUser.avatar,
+    phone: offlineUser.phone || "",
+    notificationPreferences: offlineUser.notificationPreferences || {
+      orderUpdates: true,
+      promotions: true,
+      wishlistAlerts: true,
+    },
+  };
+
+  return res
+    .status(200)
+    .json(new ApiResponse(200, safeUser, "Profile updated successfully"));
+});
+
+export const changePassword = asyncHandler(async (req, res) => {
+  const userId = req.user._id?.toString() || req.user.id?.toString();
+  const { currentPassword, newPassword } = req.body;
+
+  if (!currentPassword || !newPassword) {
+    throw new ApiError(400, "Current password and new password are required");
+  }
+
+  if (newPassword.length < 6) {
+    throw new ApiError(400, "New password must be at least 6 characters long");
+  }
+
+  if (newPassword === currentPassword) {
+    throw new ApiError(400, "New password cannot be the same as current password");
+  }
+
+  if (mongoose.connection.readyState === 1) {
+    const user = await User.findById(req.user._id);
+    if (!user) {
+      throw new ApiError(404, "User not found");
+    }
+
+    const isMatch = await user.isPasswordCorrect(currentPassword);
+    if (!isMatch) {
+      throw new ApiError(401, "Current password is incorrect");
+    }
+
+    user.password = newPassword;
+    const newAccessToken = user.generateAccessToken();
+    const newRefreshToken = user.generateRefreshToken();
+    user.refreshToken = newRefreshToken;
+
+    await user.save();
+
+    return res
+      .status(200)
+      .cookie("accessToken", newAccessToken, cookieOptions)
+      .cookie("refreshToken", newRefreshToken, cookieOptions)
+      .json(
+        new ApiResponse(
+          200,
+          { accessToken: newAccessToken, refreshToken: newRefreshToken },
+          "Password changed successfully"
+        )
+      );
+  }
+
+  // Offline fallback
+  let offlineUser = null;
+  for (const u of inMemoryUsers.values()) {
+    if (u._id?.toString() === userId) {
+      offlineUser = u;
+      break;
+    }
+  }
+
+  if (!offlineUser) {
+    // If not found in inMemoryUsers, create one with default hashed password
+    const hashedPassword = await bcryptjs.hash("password123", 10);
+    offlineUser = {
+      _id: userId,
+      id: userId,
+      email: req.user.email,
+      fullName: req.user.fullName,
+      password: hashedPassword,
+      role: req.user.role || "CUSTOMER",
+    };
+    inMemoryUsers.set(userId, offlineUser);
+  }
+
+  const isMatch = await bcryptjs.compare(currentPassword, offlineUser.password);
+  if (!isMatch) {
+    throw new ApiError(401, "Current password is incorrect");
+  }
+
+  offlineUser.password = await bcryptjs.hash(newPassword, 10);
+  const { accessToken, refreshToken } = generateTokensOffline(offlineUser);
+  offlineUser.refreshToken = refreshToken;
+
+  return res
+    .status(200)
+    .cookie("accessToken", accessToken, cookieOptions)
+    .cookie("refreshToken", refreshToken, cookieOptions)
+    .json(
+      new ApiResponse(
+        200,
+        { accessToken, refreshToken },
+        "Password changed successfully"
+      )
+    );
+});
+
+export const _registerTestUser = (user) => {
+  inMemoryUsers.set(user._id?.toString() || user.id?.toString(), user);
+  if (user.email) {
+    inMemoryUsers.set(user.email.toLowerCase(), user);
+  }
+};
+
+export const _clearTestUsers = () => {
+  inMemoryUsers.clear();
+};

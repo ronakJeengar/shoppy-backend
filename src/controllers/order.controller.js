@@ -5,6 +5,7 @@ import { Product } from "../models/product.model.js";
 import { ApiError } from "../utils/apiError.js";
 import { ApiResponse } from "../utils/apiResponse.js";
 import { asyncHandler } from "../utils/asyncHandler.js";
+import { createTransactionalNotification } from "../utils/notificationService.js";
 
 // Valid order state machine transitions map
 const VALID_TRANSITIONS = {
@@ -298,6 +299,14 @@ export const cancelOrder = asyncHandler(async (req, res) => {
       }
     }
 
+    createTransactionalNotification({
+      userId: order.customer,
+      type: "ORDER_CANCELLED",
+      title: "Order Cancelled",
+      body: `Your order #${order.orderNumber} has been cancelled.`,
+      data: { orderId: order._id.toString(), orderNumber: order.orderNumber },
+    });
+
     return res.status(200).json(
       new ApiResponse(
         200,
@@ -331,6 +340,18 @@ export const cancelOrder = asyncHandler(async (req, res) => {
     cachedOrder.status = "CANCELLED";
     cachedOrder.cancellationReason = reason.trim();
     cachedOrder.cancelledAt = new Date();
+
+    createTransactionalNotification({
+      userId: cachedOrder.customer,
+      type: "ORDER_CANCELLED",
+      title: "Order Cancelled",
+      body: `Your order #${cachedOrder.orderNumber} has been cancelled.`,
+      data: {
+        orderId: cachedOrder._id.toString(),
+        orderNumber: cachedOrder.orderNumber,
+      },
+    });
+
     if (cachedOrder.payment) {
       cachedOrder.payment.status =
         cachedOrder.payment.status === "COMPLETED" ? "REFUNDED" : "CANCELLED";
@@ -430,6 +451,21 @@ export const updateOrderStatus = asyncHandler(async (req, res) => {
     }
 
     await order.save();
+
+    let notifType = "SYSTEM";
+    if (targetStatus === "PROCESSING") notifType = "ORDER_CONFIRMED";
+    if (targetStatus === "SHIPPED") notifType = "ORDER_SHIPPED";
+    if (targetStatus === "DELIVERED") notifType = "ORDER_DELIVERED";
+    if (targetStatus === "CANCELLED") notifType = "ORDER_CANCELLED";
+
+    createTransactionalNotification({
+      userId: order.customer,
+      type: notifType,
+      title: `Order ${targetStatus.toLowerCase()}`,
+      body: `Your order #${order.orderNumber} is now ${targetStatus.toLowerCase()}.`,
+      data: { orderId: order._id.toString(), orderNumber: order.orderNumber },
+    });
+
     return res
       .status(200)
       .json(new ApiResponse(200, order, `Order status updated to ${targetStatus}`));

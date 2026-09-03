@@ -27,6 +27,25 @@ const userSchema = new Schema(
       default: "",
       trim: true,
     },
+    phone: {
+      type: String,
+      default: "",
+      trim: true,
+    },
+    notificationPreferences: {
+      orderUpdates: {
+        type: Boolean,
+        default: true,
+      },
+      promotions: {
+        type: Boolean,
+        default: true,
+      },
+      wishlistAlerts: {
+        type: Boolean,
+        default: true,
+      },
+    },
     recentlyViewed: [
       {
         type: Schema.Types.ObjectId,
