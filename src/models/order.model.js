@@ -49,6 +49,24 @@ const shippingAddressSnapshotSchema = new Schema(
   { _id: false }
 );
 
+const statusHistorySchema = new Schema(
+  {
+    status: {
+      type: String,
+      required: true,
+    },
+    timestamp: {
+      type: Date,
+      default: Date.now,
+    },
+    note: {
+      type: String,
+      default: "",
+    },
+  },
+  { _id: false }
+);
+
 const orderSchema = new Schema(
   {
     orderNumber: {
@@ -132,6 +150,33 @@ const orderSchema = new Schema(
       type: String,
       index: true,
       sparse: true,
+    },
+    carrier: {
+      type: String,
+      default: "",
+    },
+    trackingNumber: {
+      type: String,
+      default: "",
+    },
+    cancellationReason: {
+      type: String,
+      default: "",
+    },
+    cancelledAt: {
+      type: Date,
+    },
+    statusHistory: {
+      type: [statusHistorySchema],
+      default: function () {
+        return [
+          {
+            status: this.status || "PENDING_PAYMENT",
+            timestamp: new Date(),
+            note: "Order created",
+          },
+        ];
+      },
     },
   },
   {
