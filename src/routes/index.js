@@ -5,6 +5,10 @@ import categoryRouter from "./category.routes.js";
 import productRouter from "./product.routes.js";
 import cartRouter from "./cart.routes.js";
 import wishlistRouter from "./wishlist.routes.js";
+import addressRouter from "./address.routes.js";
+import checkoutRouter from "./checkout.routes.js";
+import paymentRouter from "./payment.routes.js";
+import orderRouter from "./order.routes.js";
 import {
   registerUser,
   loginUser,
@@ -40,6 +44,12 @@ router.use("/products", productRouter);
 // Cart & Wishlist modules
 router.use("/cart", cartRouter);
 router.use("/wishlist", wishlistRouter);
+
+// Checkout & Payment modules
+router.use("/addresses", addressRouter);
+router.use("/checkout", checkoutRouter);
+router.use("/payments", paymentRouter);
+router.use("/orders", orderRouter);
 
 // Backwards-compatibility aliases for legacy client endpoints
 router.post("/signUp", registerUser);
