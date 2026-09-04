@@ -11,6 +11,7 @@ import paymentRouter from "./payment.routes.js";
 import orderRouter from "./order.routes.js";
 import notificationRouter from "./notification.routes.js";
 import adminRouter from "./admin.routes.js";
+import reviewRouter from "./review.routes.js";
 import {
   registerUser,
   loginUser,
@@ -54,6 +55,7 @@ router.use("/payments", paymentRouter);
 router.use("/orders", orderRouter);
 router.use("/notifications", notificationRouter);
 router.use("/admin", adminRouter);
+router.use(reviewRouter);
 
 // Backwards-compatibility aliases for legacy client endpoints
 router.post("/signUp", registerUser);

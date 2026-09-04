@@ -20,6 +20,10 @@ import {
   updateAdminUserRole,
   getAdminAuditLogs,
 } from "../controllers/admin.controller.js";
+import {
+  getAdminReviews,
+  updateReviewStatus,
+} from "../controllers/review.controller.js";
 
 const router = Router();
 
@@ -56,5 +60,9 @@ router.patch("/users/:id/role", updateAdminUserRole);
 
 // 6. Audit Logging
 router.get("/audit-logs", getAdminAuditLogs);
+
+// 7. Review Moderation
+router.get("/reviews", getAdminReviews);
+router.patch("/reviews/:id/status", updateReviewStatus);
 
 export default router;

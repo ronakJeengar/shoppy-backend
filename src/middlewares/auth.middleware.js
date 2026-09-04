@@ -31,7 +31,8 @@ export const verifyJWT = asyncHandler(async (req, res, next) => {
     user = {
       _id: decodedToken?._id || "64f1a2b3c4d5e6f7a8b9c999",
       email: decodedToken?.email || "test@example.com",
-      fullname: decodedToken?.fullname || "Test User",
+      fullName: decodedToken?.fullName || decodedToken?.fullname || "Test User",
+      fullname: decodedToken?.fullName || decodedToken?.fullname || "Test User",
       role: decodedToken?.role || "USER",
     };
   }
