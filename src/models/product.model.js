@@ -39,6 +39,11 @@ const productSchema = new Schema(
       ref: "Category",
       required: true,
     },
+    isActive: {
+      type: Boolean,
+      default: true,
+      index: true,
+    },
   },
   {
     timestamps: true,

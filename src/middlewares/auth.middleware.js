@@ -40,6 +40,10 @@ export const verifyJWT = asyncHandler(async (req, res, next) => {
     throw new ApiError(401, "Invalid access token: User not found");
   }
 
+  if (user.isActive === false) {
+    throw new ApiError(403, "Forbidden: Your account has been deactivated or suspended");
+  }
+
   req.user = user;
   next();
 });

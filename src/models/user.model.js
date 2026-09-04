@@ -64,6 +64,10 @@ const userSchema = new Schema(
       enum: ["CUSTOMER", "ADMIN"],
       default: "CUSTOMER",
     },
+    isActive: {
+      type: Boolean,
+      default: true,
+    },
   },
   {
     timestamps: true,
