@@ -4,6 +4,8 @@ import { Category } from "../models/category.model.js";
 import { ApiError } from "../utils/apiError.js";
 import { ApiResponse } from "../utils/apiResponse.js";
 import { asyncHandler } from "../utils/asyncHandler.js";
+import { defaultHybridSearchEngine } from "../ai/search/hybridSearchEngine.js";
+import { defaultProductSearchIndex } from "../ai/search/productSearchIndex.js";
 
 const escapeRegex = (string) => {
   return string.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
@@ -127,6 +129,45 @@ export const getProducts = asyncHandler(async (req, res) => {
   const rawSearch = search || q;
   if (rawSearch && rawSearch.length > 100) {
     throw new ApiError(400, "Search query must not exceed 100 characters");
+  }
+
+  // If a search query is provided, execute Hybrid Semantic Search
+  if (rawSearch && rawSearch.trim()) {
+    // Bootstrap vector index if not yet populated
+    if ((await defaultProductSearchIndex.count()) === 0) {
+      if (mongoose.connection.readyState === 1) {
+        const activeDocs = await Product.find({ isActive: true })
+          .populate("category", "name")
+          .lean();
+        await defaultProductSearchIndex.indexBatch(activeDocs);
+      } else {
+        await defaultProductSearchIndex.indexBatch(fallbackProducts);
+      }
+    }
+
+    const searchResult = await defaultHybridSearchEngine.search({
+      query: rawSearch.trim(),
+      category,
+      minPrice,
+      maxPrice,
+      minRating,
+      inStock,
+      sort,
+      page,
+      limit,
+      fallbackProducts,
+    });
+
+    return res.status(200).json(
+      new ApiResponse(
+        200,
+        {
+          products: searchResult.products,
+          pagination: searchResult.pagination,
+        },
+        "Products retrieved successfully"
+      )
+    );
   }
 
   const pageNum = Math.max(1, parseInt(page, 10) || 1);

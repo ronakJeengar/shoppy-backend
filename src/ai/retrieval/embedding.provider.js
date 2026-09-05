@@ -15,6 +15,8 @@ export class EmbeddingProvider {
 
 /**
  * Deterministic embedding provider generating normalized vectors for testing and local development.
+ * Uses token-based hashing so that shared words and semantic terms produce high cosine similarity,
+ * while non-overlapping vocabulary yields near-zero similarity.
  */
 export class MockEmbeddingProvider extends EmbeddingProvider {
   constructor(config = {}) {
@@ -24,11 +26,20 @@ export class MockEmbeddingProvider extends EmbeddingProvider {
 
   _generateVector(text) {
     const vec = new Array(this.dimensions).fill(0);
-    const sanitized = String(text || "").toLowerCase();
+    const sanitized = String(text || "")
+      .toLowerCase()
+      .replace(/[^a-z0-9\s]/g, " ");
+    const words = sanitized.split(/\s+/).filter((w) => w.length > 1);
 
-    for (let i = 0; i < sanitized.length; i++) {
-      const charCode = sanitized.charCodeAt(i);
-      const dimIndex = (charCode * 7 + i) % this.dimensions;
+    if (words.length === 0) return vec;
+
+    for (const word of words) {
+      // DJB2-inspired hash to project token into vector dimension space
+      let h = 5381;
+      for (let i = 0; i < word.length; i++) {
+        h = (h << 5) + h + word.charCodeAt(i);
+      }
+      const dimIndex = Math.abs(h) % this.dimensions;
       vec[dimIndex] += 1;
     }
 

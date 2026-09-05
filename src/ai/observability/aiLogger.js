@@ -70,3 +70,29 @@ export const logAiEvent = ({
 
   return logEntry;
 };
+
+export const logSearchEvent = ({
+  query = "",
+  searchMode = "keyword",
+  candidateCount = 0,
+  resultCount = 0,
+  durationMs = 0,
+  fallbackUsed = false,
+  extractedConstraints = {},
+}) => {
+  return logAiEvent({
+    event: fallbackUsed ? "SEARCH_FALLBACK_TRIGGERED" : "SEARCH_COMPLETED",
+    provider: "search_engine",
+    model: searchMode,
+    durationMs,
+    success: true,
+    metadata: {
+      query: sanitizeAiText(query),
+      searchMode,
+      candidateCount,
+      resultCount,
+      fallbackUsed,
+      extractedConstraints,
+    },
+  });
+};

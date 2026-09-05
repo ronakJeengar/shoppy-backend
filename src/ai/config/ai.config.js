@@ -13,7 +13,7 @@ export const aiConfig = {
   // Feature Flags
   features: {
     assistantEnabled: process.env.AI_ASSISTANT_ENABLED !== "false",
-    semanticSearchEnabled: process.env.AI_SEARCH_ENABLED === "true",
+    semanticSearchEnabled: process.env.AI_SEARCH_ENABLED !== "false",
     recommendationsEnabled: false, // Reserved for Phase 16
     toolCallingEnabled: true,
   },
