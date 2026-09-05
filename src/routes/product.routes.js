@@ -5,13 +5,13 @@ import {
   getProductById,
   createProduct,
 } from "../controllers/product.controller.js";
-import { verifyJWT, requireRole } from "../middlewares/auth.middleware.js";
+import { verifyJWT, requireRole, optionalJWT } from "../middlewares/auth.middleware.js";
 
 const router = Router();
 
-router.get("/", getProducts);
+router.get("/", optionalJWT, getProducts);
 router.get("/suggestions", getProductSuggestions);
-router.get("/:id", getProductById);
+router.get("/:id", optionalJWT, getProductById);
 router.post("/", verifyJWT, requireRole(["ADMIN"]), createProduct);
 
 export default router;

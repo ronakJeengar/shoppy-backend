@@ -141,8 +141,6 @@ export const logRagRetrievalEvent = ({
     provider: "knowledge_retriever",
     model: "vector_similarity",
     durationMs,
-    success,
-    error,
     metadata: {
       query: sanitizeAiText(query),
       sourceType,
@@ -152,5 +150,14 @@ export const logRagRetrievalEvent = ({
       zeroResults: resultCount === 0,
     },
   });
+};
+
+export const aiLogger = {
+  log: logAiEvent,
+  logSearchEvent,
+  logRagIngestionEvent,
+  logRagRetrievalEvent,
+  sanitizeAiText,
+  generateAiRequestId,
 };
 

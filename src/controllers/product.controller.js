@@ -6,6 +6,7 @@ import { ApiResponse } from "../utils/apiResponse.js";
 import { asyncHandler } from "../utils/asyncHandler.js";
 import { defaultHybridSearchEngine } from "../ai/search/hybridSearchEngine.js";
 import { defaultProductSearchIndex } from "../ai/search/productSearchIndex.js";
+import { defaultInteractionService } from "../ai/recommendations/interaction.service.js";
 
 const escapeRegex = (string) => {
   return string.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
@@ -434,6 +435,17 @@ export const getProductById = asyncHandler(async (req, res) => {
       : null,
     createdAt: product.createdAt,
   };
+
+  // Asynchronously record interaction event (non-blocking)
+  defaultInteractionService
+    .recordEvent({
+      userId: req.user?._id,
+      sessionId: req.header("x-session-id"),
+      eventType: "VIEW_PRODUCT",
+      productId: product._id,
+      categoryId: product.category?._id || product.category,
+    })
+    .catch(() => {});
 
   return res
     .status(200)
