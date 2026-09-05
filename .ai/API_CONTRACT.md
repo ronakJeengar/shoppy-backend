@@ -1,0 +1,44 @@
+# Shoppy Authoritative API Contract
+
+Base URL: `http://localhost:8000/api/v1`
+
+## 1. Authentication & Users
+- `POST /auth/register` - Create new customer or admin account.
+- `POST /auth/login` - Authenticate with email/password; returns JWT accessToken and user object.
+- `GET /auth/me` - Fetch profile of currently authenticated user.
+- `PATCH /auth/profile` - Update profile attributes (fullName, phone).
+- `POST /auth/change-password` - Authoritative password update verifying current password.
+
+## 2. Product Catalog & Categories
+- `GET /categories` - List active categories with slug and image.
+- `GET /products` - List products with pagination (`page`, `limit`), sorting (`price_asc`, `price_desc`, `rating`, `newest`), category filtering (`categoryId`), price boundaries (`minPrice`, `maxPrice`), search keywords (`q`), and in-stock filter (`inStock`).
+- `GET /products/suggestions?q=:query` - Autocomplete suggestions for search input.
+- `GET /products/:id` - Fetch detailed product attributes, gallery, and ratings.
+
+## 3. Cart & Wishlist Management
+- `GET /cart` - Fetch user's cart with authoritative product details and subtotal.
+- `POST /cart/items` - Add item to cart with quantity validation against live stock.
+- `PATCH /cart/items/:id` - Update quantity of item in cart.
+- `DELETE /cart/items/:id` - Remove item from cart.
+- `GET /wishlist` - Fetch user's saved wishlist items.
+- `POST /wishlist/toggle` - Atomically add/remove product to/from user wishlist.
+
+## 4. Checkout & Orders
+- `GET /addresses` - List user saved delivery addresses.
+- `POST /addresses` - Add new delivery address.
+- `POST /checkout/validate` - Authoritatively validate shipping, subtotal, tax (8%), and grandTotal.
+- `POST /checkout/create` - Create order and initiate payment with idempotency key.
+- `POST /payments/verify` - Confirm payment signature and transition order to CONFIRMED.
+- `GET /orders` - List user orders sorted by newest first.
+- `GET /orders/:id` - Detailed order breakdown with status history, items snapshot, and tracking.
+- `POST /orders/:id/cancel` - Cancel confirmed order (IDOR protected, stock restored).
+
+## 5. Reviews & Ratings
+- `GET /products/:productId/reviews` - List approved customer reviews with star rating breakdown.
+- `GET /products/:productId/reviews/eligibility` - Check if user has purchased item and can write review.
+- `POST /products/:productId/reviews` - Submit review with verified purchase enforcement.
+
+## 6. Recommendations & AI Interaction
+- `GET /recommendations?type=PERSONALIZED|TRENDING|SIMILAR_PRODUCTS|FREQUENTLY_BOUGHT_TOGETHER` - Non-authoritative recommendations powered by vector/collaborative signals.
+- `POST /recommendations/events` - Track user interactions (VIEW_PRODUCT, ADD_TO_CART, WISHLIST_ADD).
+- `POST /ai/assistant/chat` - Natural language shopping assistant returning structured response with intent, products, and non-authoritative recommendations.
