@@ -7,7 +7,8 @@
   "scripts": {
     "dev": "nodemon -r ./src/utils/nodePolyfill.js -r dotenv/config --experimental-json-modules src/index.js",
     "start": "node -r ./src/utils/nodePolyfill.js src/index.js",
-    "test": "node -r ./src/utils/nodePolyfill.js --test tests/*.test.js"
+    "test": "node -r ./src/utils/nodePolyfill.js --test tests/*.test.js",
+    "eval": "node -r ./src/utils/nodePolyfill.js src/ai/evaluation/evalRunner.js"
   },
   "keywords": [
     "javascript",
