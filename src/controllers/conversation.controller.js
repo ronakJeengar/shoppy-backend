@@ -1,6 +1,8 @@
 import mongoose from "mongoose";
 import { Conversation, memoryConversations } from "../models/conversation.model.js";
 import { defaultAiService } from "../ai/services/aiService.js";
+import { defaultConfirmationService } from "../ai/services/confirmation.service.js";
+import { defaultToolRegistry } from "../ai/tools/tool.registry.js";
 import { ApiError } from "../utils/apiError.js";
 import { ApiResponse } from "../utils/apiResponse.js";
 import { asyncHandler } from "../utils/asyncHandler.js";
@@ -89,6 +91,7 @@ export const chatWithAssistant = asyncHandler(async (req, res) => {
     id: `msg_a_${Date.now()}`,
     role: "assistant",
     content: aiResult.message || aiResult.answer,
+    pendingConfirmation: aiResult.pendingConfirmation || null,
     products: aiResult.products || [],
     sources: aiResult.sources || [],
     actions: aiResult.actions || [],
@@ -118,9 +121,11 @@ export const chatWithAssistant = asyncHandler(async (req, res) => {
         conversationId: convId,
         message: assistantMsg.content,
         answer: assistantMsg.content,
+        pendingConfirmation: assistantMsg.pendingConfirmation,
         products: assistantMsg.products,
         sources: assistantMsg.sources,
         actions: assistantMsg.actions,
+        trace: aiResult.trace,
         requestId: aiResult.requestId,
         metadata: aiResult.metadata,
       },
@@ -377,3 +382,126 @@ export const clearConversationMessages = asyncHandler(async (req, res) => {
     );
   }
 });
+
+/**
+ * Confirm and execute a pending consequential action: POST /api/v1/ai/assistant/confirm
+ * Requires valid confirmationId and authenticated customer context.
+ */
+export const confirmPendingAction = asyncHandler(async (req, res) => {
+  const { confirmationId, conversationId } = req.body;
+  const userId = req.user?._id ? req.user._id.toString() : null;
+
+  if (!userId) {
+    throw new ApiError(401, "Authentication required to confirm actions");
+  }
+
+  if (!confirmationId) {
+    throw new ApiError(400, "confirmationId is required");
+  }
+
+  // 1. Validate & Consume Confirmation Record (anti-IDOR, anti-replay, TTL)
+  const confirmationRecord = defaultConfirmationService.validateAndConsumeConfirmation({
+    confirmationId,
+    userId,
+    conversationId,
+  });
+
+  // 2. Authoritatively Execute the Confirmed Tool
+  let executionResult;
+  try {
+    executionResult = await defaultToolRegistry.executeTool(
+      confirmationRecord.toolName,
+      {
+        ...confirmationRecord.arguments,
+        confirmed: true,
+        confirmationId,
+      },
+      {
+        user: req.user,
+        conversationId: conversationId || confirmationRecord.conversationId,
+      }
+    );
+  } catch (err) {
+    throw new ApiError(500, `Failed to execute confirmed action: ${err.message}`);
+  }
+
+  // 3. Append confirmation event to conversation history if conversationId provided
+  const targetConvId = conversationId || confirmationRecord.conversationId;
+  if (targetConvId) {
+    const confirmMessage = {
+      id: `msg_cf_${Date.now()}`,
+      role: "assistant",
+      content: executionResult.message || `Action '${confirmationRecord.action}' confirmed and completed successfully.`,
+      actions: [
+        {
+          type: "OPEN_ORDER",
+          label: "View Order",
+          payload: { orderId: confirmationRecord.arguments?.orderId },
+        },
+      ],
+      timestamp: new Date(),
+    };
+
+    if (mongoose.connection.readyState === 1 && mongoose.Types.ObjectId.isValid(targetConvId)) {
+      await Conversation.findByIdAndUpdate(targetConvId, {
+        $push: { messages: confirmMessage },
+        $set: { updatedAt: new Date() },
+      });
+    } else if (memoryConversations.has(targetConvId)) {
+      const conv = memoryConversations.get(targetConvId);
+      conv.messages.push(confirmMessage);
+      conv.updatedAt = new Date();
+      memoryConversations.set(targetConvId, conv);
+    }
+  }
+
+  return res.status(200).json(
+    new ApiResponse(
+      200,
+      {
+        success: true,
+        confirmationId,
+        action: confirmationRecord.action,
+        status: "COMPLETED",
+        result: executionResult,
+        message: executionResult.message || `Action confirmed and completed successfully.`,
+      },
+      "Action confirmed and completed successfully"
+    )
+  );
+});
+
+/**
+ * Cancel a pending consequential action: POST /api/v1/ai/assistant/cancel-action
+ */
+export const cancelPendingAction = asyncHandler(async (req, res) => {
+  const { confirmationId } = req.body;
+  const userId = req.user?._id ? req.user._id.toString() : null;
+
+  if (!userId) {
+    throw new ApiError(401, "Authentication required to cancel actions");
+  }
+
+  if (!confirmationId) {
+    throw new ApiError(400, "confirmationId is required");
+  }
+
+  const cancelledRecord = defaultConfirmationService.cancelConfirmation({
+    confirmationId,
+    userId,
+  });
+
+  return res.status(200).json(
+    new ApiResponse(
+      200,
+      {
+        success: true,
+        confirmationId,
+        status: "CANCELLED",
+        message: "Action proposal has been cancelled.",
+      },
+      "Action cancelled successfully"
+    )
+  );
+});
+

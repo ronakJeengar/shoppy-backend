@@ -1,13 +1,20 @@
 import { SearchProductsTool } from "./searchProducts.tool.js";
+import { SemanticProductSearchTool } from "./semanticProductSearch.tool.js";
 import { GetProductDetailsTool } from "./getProductDetails.tool.js";
+import { CheckProductAvailabilityTool } from "./checkProductAvailability.tool.js";
 import { GetUserOrderStatusTool } from "./getUserOrderStatus.tool.js";
 import { CheckStorePolicyTool } from "./checkStorePolicy.tool.js";
 import { SearchKnowledgeTool } from "./searchKnowledge.tool.js";
 import { GetCartTool } from "./getCart.tool.js";
 import { AddToCartTool } from "./addToCart.tool.js";
 import { RemoveFromCartTool } from "./removeFromCart.tool.js";
+import { UpdateCartQuantityTool } from "./updateCartQuantity.tool.js";
+import { AddToWishlistTool } from "./addToWishlist.tool.js";
+import { RemoveFromWishlistTool } from "./removeFromWishlist.tool.js";
 import { GetUserOrdersTool } from "./getUserOrders.tool.js";
 import { GetOrderDetailsTool } from "./getOrderDetails.tool.js";
+import { GetUserProfileTool } from "./getUserProfile.tool.js";
+import { CancelOrderTool } from "./cancelOrder.tool.js";
 import { AiError } from "../errors/aiError.js";
 
 export class ToolRegistry {
@@ -16,7 +23,7 @@ export class ToolRegistry {
   }
 
   registerTool(tool) {
-    if (!tool.name) throw new Error("Tool must have a valid name");
+    if (!tool || !tool.name) throw new Error("Tool must have a valid name");
     this.tools.set(tool.name, tool);
   }
 
@@ -28,6 +35,12 @@ export class ToolRegistry {
     return Array.from(this.tools.keys());
   }
 
+  getToolsBySideEffectType(sideEffectType) {
+    return Array.from(this.tools.values()).filter(
+      (t) => t.sideEffectType === sideEffectType
+    );
+  }
+
   /**
    * Returns schema definitions for tools that the current user context is authorized to see.
    */
@@ -37,6 +50,8 @@ export class ToolRegistry {
     const userRole = context.user?.role || "GUEST";
 
     for (const tool of this.tools.values()) {
+      if (!tool.enabled) continue;
+
       if (tool.requiresAuth && !isAuthenticated) {
         continue;
       }
@@ -54,12 +69,16 @@ export class ToolRegistry {
   }
 
   /**
-   * Safely execute an allowlisted tool with input validation and authorization checks.
+   * Safely execute an allowlisted tool with input validation, authorization, and timeout bounds.
    */
   async executeTool(name, args, context = {}) {
     const tool = this.tools.get(name);
     if (!tool) {
       throw AiError.toolError(name, `Tool '${name}' is not registered or allowlisted.`);
+    }
+
+    if (!tool.enabled) {
+      throw AiError.toolError(name, `Tool '${name}' is currently disabled.`);
     }
 
     // Parse string arguments if received from LLM
@@ -68,28 +87,31 @@ export class ToolRegistry {
       try {
         parsedArgs = JSON.parse(args);
       } catch (err) {
-        throw AiError.toolError(name, `Invalid JSON arguments provided: ${err.message}`);
+        throw AiError.toolValidationError(name, `Invalid JSON arguments provided: ${err.message}`);
       }
     }
 
-    try {
-      const result = await tool.run(parsedArgs || {}, context);
-      return result;
-    } catch (err) {
-      throw AiError.toolError(name, err.message);
-    }
+    // Pass validated arguments to tool.run() which handles auth, validation, timeout, sanitization
+    return await tool.run(parsedArgs || {}, context);
   }
 }
 
-// Default registry populated with standard allowlisted tools
+// Default registry populated with all standard allowlisted tools
 export const defaultToolRegistry = new ToolRegistry();
 defaultToolRegistry.registerTool(new SearchProductsTool());
+defaultToolRegistry.registerTool(new SemanticProductSearchTool());
 defaultToolRegistry.registerTool(new GetProductDetailsTool());
+defaultToolRegistry.registerTool(new CheckProductAvailabilityTool());
 defaultToolRegistry.registerTool(new GetUserOrderStatusTool());
 defaultToolRegistry.registerTool(new CheckStorePolicyTool());
 defaultToolRegistry.registerTool(new SearchKnowledgeTool());
 defaultToolRegistry.registerTool(new GetCartTool());
 defaultToolRegistry.registerTool(new AddToCartTool());
 defaultToolRegistry.registerTool(new RemoveFromCartTool());
+defaultToolRegistry.registerTool(new UpdateCartQuantityTool());
+defaultToolRegistry.registerTool(new AddToWishlistTool());
+defaultToolRegistry.registerTool(new RemoveFromWishlistTool());
 defaultToolRegistry.registerTool(new GetUserOrdersTool());
 defaultToolRegistry.registerTool(new GetOrderDetailsTool());
+defaultToolRegistry.registerTool(new GetUserProfileTool());
+defaultToolRegistry.registerTool(new CancelOrderTool());

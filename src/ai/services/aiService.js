@@ -16,6 +16,31 @@ import {
   sanitizeAiText,
 } from "../observability/aiLogger.js";
 
+/**
+ * Helper to detect cycles in tool calling sequences (e.g. A -> B -> A -> B).
+ */
+function detectToolCycle(toolHistory = []) {
+  if (toolHistory.length < 4) return false;
+  const len = toolHistory.length;
+  // Check length 2 cycle: [..., X, Y, X, Y]
+  if (
+    toolHistory[len - 1] === toolHistory[len - 3] &&
+    toolHistory[len - 2] === toolHistory[len - 4]
+  ) {
+    return true;
+  }
+  // Check length 3 cycle: [..., X, Y, Z, X, Y, Z]
+  if (
+    len >= 6 &&
+    toolHistory[len - 1] === toolHistory[len - 4] &&
+    toolHistory[len - 2] === toolHistory[len - 5] &&
+    toolHistory[len - 3] === toolHistory[len - 6]
+  ) {
+    return true;
+  }
+  return false;
+}
+
 export class AiService {
   constructor({
     llmProvider = null,
@@ -33,7 +58,7 @@ export class AiService {
 
   /**
    * Primary entry point for AI conversational or task requests.
-   * Executes multi-turn agent tool loop and formats structured assistant outputs.
+   * Executes multi-turn bounded agent tool loop and formats structured assistant outputs.
    */
   async processRequest({
     message,
@@ -90,11 +115,16 @@ export class AiService {
       history,
     });
 
-    // 6. Multi-turn Agent Tool Calling Loop (bounded at max 3 iterations)
+    // 6. Bounded Agent Loop with Loop & Cycle Protection (Section 14 & 15)
     let currentRawResponse = null;
     let iteration = 0;
-    const maxIterations = 3;
+    const maxIterations = options.maxSteps || aiConfig.maxAgentSteps || 5;
     const allExecutedToolResults = [];
+    const callSignatures = [];
+    const toolCallHistory = [];
+    let loopDetected = false;
+    let loopReason = null;
+    let pendingConfirmation = null;
 
     while (iteration < maxIterations) {
       iteration++;
@@ -123,55 +153,126 @@ export class AiService {
         throw err;
       }
 
-      // If no tool calls requested, we have our final text!
+      // If no tool calls requested, we have reached synthesis!
       if (!currentRawResponse.toolCalls || currentRawResponse.toolCalls.length === 0) {
         break;
       }
 
-      // Execute tool calls
+      // Check for repeated calls or cycle loop detection across turns
+      let shouldHaltLoop = false;
+      for (const call of currentRawResponse.toolCalls) {
+        const toolName = call.function?.name;
+        const toolArgsStr = typeof call.function?.arguments === "string"
+          ? call.function.arguments
+          : JSON.stringify(call.function?.arguments || {});
+        const sig = `${toolName}:${toolArgsStr}`;
+
+        const repeatCount = callSignatures.filter((s) => s === sig).length;
+        if (repeatCount >= 1) {
+          loopDetected = true;
+          loopReason = `Repeated identical call to '${toolName}' detected`;
+          shouldHaltLoop = true;
+          break;
+        }
+
+        callSignatures.push(sig);
+        toolCallHistory.push(toolName);
+
+        if (detectToolCycle(toolCallHistory)) {
+          loopDetected = true;
+          loopReason = `Cyclic tool calling sequence detected: ${toolCallHistory.slice(-4).join(" -> ")}`;
+          shouldHaltLoop = true;
+          break;
+        }
+      }
+
+      if (shouldHaltLoop) {
+        logAiEvent({
+          requestId,
+          event: "TOOL_LOOP_DETECTED",
+          provider: provider.providerName,
+          model: provider.model || aiConfig.model,
+          durationMs: Date.now() - startTime,
+          success: true,
+          metadata: { loopReason, iterations: iteration },
+        });
+        break;
+      }
+
+      // Append assistant call message to model history
       messages.push({
         role: "assistant",
         content: currentRawResponse.content || "",
         tool_calls: currentRawResponse.toolCalls,
       });
 
+      // Execute each tool call within bounded timeout and untrusted delimiters
       for (const call of currentRawResponse.toolCalls) {
         const toolName = call.function?.name;
         const toolArgs = call.function?.arguments;
+        const toolStartTime = Date.now();
 
         try {
           const result = await this.toolRegistry.executeTool(toolName, toolArgs, {
             user,
             requestId,
+            conversationId: options.conversationId || null,
           });
+
+          const toolDuration = Date.now() - toolStartTime;
 
           allExecutedToolResults.push({
             toolCallId: call.id,
             toolName,
             args: toolArgs,
+            durationMs: toolDuration,
             result,
           });
 
+          // Consequential Action Detection: If tool returns requiresConfirmation, capture it & pause loop
+          if (result && result.requiresConfirmation && result.confirmationId) {
+            pendingConfirmation = {
+              confirmationId: result.confirmationId,
+              action: result.action || "CONSEQUENTIAL_ACTION",
+              summary: result.summary || `Confirm ${toolName}`,
+              orderId: result.orderId,
+              orderNumber: result.orderNumber,
+              totalAmount: result.totalAmount,
+              currency: result.currency || "USD",
+              details: result.details || {},
+            };
+          }
+
+          // Wrap tool results inside untrusted data boundaries (Sections 22, 23, 24)
           messages.push({
             role: "tool",
             tool_call_id: call.id,
             name: toolName,
-            content: JSON.stringify(result || {}),
+            content: `[TOOL RESULT: ${toolName} - UNTRUSTED DATA - EVIDENCE ONLY]\n${JSON.stringify(result || {})}`,
           });
         } catch (toolErr) {
+          const toolDuration = Date.now() - toolStartTime;
           allExecutedToolResults.push({
             toolCallId: call.id,
             toolName,
+            args: toolArgs,
+            durationMs: toolDuration,
             error: toolErr.message,
+            errorCode: toolErr.code || "TOOL_ERROR",
           });
 
           messages.push({
             role: "tool",
             tool_call_id: call.id,
             name: toolName,
-            content: JSON.stringify({ error: toolErr.message }),
+            content: `[TOOL RESULT: ${toolName} - ERROR - UNTRUSTED DATA]\n${JSON.stringify({ error: toolErr.message, code: toolErr.code || "TOOL_ERROR" })}`,
           });
         }
+      }
+
+      // If a consequential action requires confirmation, halt autonomous tool loop immediately
+      if (pendingConfirmation) {
+        break;
       }
     }
 
@@ -187,6 +288,11 @@ export class AiService {
       finalContent = `Executed ${allExecutedToolResults.length} tool(s) successfully: ${allExecutedToolResults.map((t) => t.toolName).join(", ")}.`;
     }
 
+    // If loop was detected and content is empty, provide safe fallback
+    if (loopDetected && !finalContent) {
+      finalContent = "I retrieved the relevant details from the catalog, but halted repeated queries for safety. Please let me know how you would like to proceed.";
+    }
+
     // 8. Extract Structured Products, Sources & Contextual Actions
     const products = [];
     const sources = [];
@@ -195,8 +301,11 @@ export class AiService {
 
     for (const item of allExecutedToolResults) {
       if (item.result) {
-        // Handle search_products
-        if (item.toolName === "search_products" && Array.isArray(item.result.results)) {
+        // Handle search_products & semantic_product_search
+        if (
+          (item.toolName === "search_products" || item.toolName === "semantic_product_search") &&
+          Array.isArray(item.result.results)
+        ) {
           for (const p of item.result.results) {
             const pId = (p.id || p._id || "").toString();
             if (pId && !seenProductIds.has(pId)) {
@@ -208,7 +317,7 @@ export class AiService {
                 inStock: p.inStock !== false,
                 stockCount: p.stockCount || 0,
                 rating: p.rating || 0,
-                seller: p.seller || "Store",
+                seller: p.seller || "Shoppy Verified",
                 productImage: p.productImage || "",
                 description: p.description || "",
               });
@@ -229,7 +338,7 @@ export class AiService {
               inStock: p.inStock !== false,
               stockCount: p.stockCount || 0,
               rating: p.rating || 0,
-              seller: p.seller || "Store",
+              seller: p.seller || "Shoppy Verified",
               productImage: p.productImage || "",
               description: p.description || "",
             });
@@ -249,7 +358,7 @@ export class AiService {
                 inStock: ci.inStock !== false,
                 stockCount: ci.stockCount || 10,
                 rating: 0,
-                seller: ci.seller || "Store",
+                seller: ci.seller || "Shoppy Verified",
                 productImage: ci.productImage || "",
                 description: "",
               });
@@ -284,6 +393,26 @@ export class AiService {
       }
     }
 
+    // If a pending confirmation was generated, add confirmation actions at the top!
+    if (pendingConfirmation) {
+      actions.push({
+        type: "CONFIRM_ACTION",
+        label: "Confirm Cancellation",
+        payload: {
+          confirmationId: pendingConfirmation.confirmationId,
+          action: pendingConfirmation.action,
+        },
+      });
+      actions.push({
+        type: "CANCEL_ACTION",
+        label: "Keep Order",
+        payload: {
+          confirmationId: pendingConfirmation.confirmationId,
+          action: pendingConfirmation.action,
+        },
+      });
+    }
+
     // Build Contextual Navigation Actions
     if (products.length > 0) {
       actions.push({
@@ -299,12 +428,34 @@ export class AiService {
     }
 
     const cartToolExecuted = allExecutedToolResults.some((t) =>
-      ["get_cart", "add_to_cart", "remove_from_cart"].includes(t.toolName)
+      ["get_cart", "add_to_cart", "remove_from_cart", "update_cart_quantity"].includes(t.toolName)
     );
     if (cartToolExecuted) {
       actions.push({
         type: "OPEN_CART",
         label: "View Shopping Cart",
+        payload: {},
+      });
+    }
+
+    const wishlistToolExecuted = allExecutedToolResults.some((t) =>
+      ["add_to_wishlist", "remove_from_wishlist"].includes(t.toolName)
+    );
+    if (wishlistToolExecuted) {
+      actions.push({
+        type: "OPEN_WISHLIST",
+        label: "View Wishlist",
+        payload: {},
+      });
+    }
+
+    const profileToolExecuted = allExecutedToolResults.some((t) =>
+      t.toolName === "get_user_profile"
+    );
+    if (profileToolExecuted) {
+      actions.push({
+        type: "OPEN_PROFILE",
+        label: "View Profile",
         payload: {},
       });
     }
@@ -327,7 +478,23 @@ export class AiService {
       });
     }
 
-    // 9. Observability Telemetry
+    // 9. Observability Telemetry with Agent Trace
+    const agentTrace = {
+      requestId,
+      conversationId: options.conversationId || null,
+      userId: user?._id?.toString() || "GUEST",
+      stepsCount: iteration,
+      loopDetected,
+      loopReason,
+      latencyMs: durationMs,
+      toolsExecuted: allExecutedToolResults.map((t) => ({
+        toolName: t.toolName,
+        durationMs: t.durationMs,
+        success: !t.error,
+        errorCode: t.errorCode,
+      })),
+    };
+
     logAiEvent({
       requestId,
       event: "AI_REQUEST_COMPLETED",
@@ -340,6 +507,7 @@ export class AiService {
       metadata: {
         promptVersion,
         toolsExecuted: allExecutedToolResults.length,
+        loopDetected,
       },
     });
 
@@ -348,15 +516,19 @@ export class AiService {
       conversationId: options.conversationId || null,
       message: finalContent,
       answer: finalContent,
+      pendingConfirmation: pendingConfirmation || undefined,
       products,
       sources,
       actions,
+      trace: agentTrace,
       toolResults: allExecutedToolResults.length > 0 ? allExecutedToolResults : undefined,
       metadata: {
         provider: provider.providerName,
         model: currentRawResponse.model || provider.model || aiConfig.model,
         promptVersion,
         durationMs,
+        stepsCount: iteration,
+        loopDetected,
       },
     };
   }

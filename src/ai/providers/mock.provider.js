@@ -16,12 +16,33 @@ export class MockLLMProvider extends LLMProvider {
     this.customToolCalls.set(promptSubstring.toLowerCase(), toolCall);
   }
 
+  setCustomToolCall(promptSubstring, toolCall) {
+    return this.setMockToolCall(promptSubstring, toolCall);
+  }
+
   clearMocks() {
     this.customResponses.clear();
     this.customToolCalls.clear();
   }
 
   async generateResponse({ messages, tools = [], options = {} }) {
+    // Check if custom tool call was explicitly configured for testing
+    const lastUserMessage = [...messages]
+      .reverse()
+      .find((m) => m.role === "user")?.content || "";
+    const lower = lastUserMessage.toLowerCase();
+
+    for (const [key, toolCall] of this.customToolCalls.entries()) {
+      if (lower.includes(key)) {
+        return {
+          content: "",
+          toolCalls: Array.isArray(toolCall) ? toolCall : [toolCall],
+          usage: { promptTokens: 45, completionTokens: 25, totalTokens: 70 },
+          model: this.config.model || "mock-model-v1",
+        };
+      }
+    }
+
     // 1. Check if the most recent message is a tool response (agent loop follow-up)
     const lastMessage = messages[messages.length - 1];
     if (lastMessage && lastMessage.role === "tool") {
@@ -103,30 +124,65 @@ export class MockLLMProvider extends LLMProvider {
         };
       }
 
+      if (toolName === "update_cart_quantity") {
+        return {
+          content: parsed.message || `Updated quantity in your shopping cart successfully.`,
+          usage: { promptTokens: 30, completionTokens: 15, totalTokens: 45 },
+          model: this.config.model || "mock-model-v1",
+        };
+      }
+
+      if (toolName === "add_to_wishlist" || toolName === "remove_from_wishlist") {
+        return {
+          content: parsed.message || (toolName === "add_to_wishlist" ? "Added to your wishlist." : "Removed from your wishlist."),
+          usage: { promptTokens: 30, completionTokens: 15, totalTokens: 45 },
+          model: this.config.model || "mock-model-v1",
+        };
+      }
+
+      if (toolName === "check_product_availability") {
+        return {
+          content: parsed.message || `The item is ${parsed.status} with ${parsed.stockCount} unit(s) available.`,
+          usage: { promptTokens: 35, completionTokens: 15, totalTokens: 50 },
+          model: this.config.model || "mock-model-v1",
+        };
+      }
+
+      if (toolName === "get_user_profile") {
+        return {
+          content: `Here is your profile: Name: ${parsed.fullName}, Email: ${parsed.email}, Phone: ${parsed.phone}.`,
+          usage: { promptTokens: 40, completionTokens: 20, totalTokens: 60 },
+          model: this.config.model || "mock-model-v1",
+        };
+      }
+
+      if (toolName === "cancel_order") {
+        if (parsed.requiresConfirmation) {
+          return {
+            content: parsed.message || `I found your order #${parsed.orderNumber}. Would you like me to cancel it and initiate a refund of $${parsed.totalAmount}?`,
+            usage: { promptTokens: 45, completionTokens: 25, totalTokens: 70 },
+            model: this.config.model || "mock-model-v1",
+          };
+        } else if (parsed.success) {
+          return {
+            content: parsed.message || `Order #${parsed.orderNumber} has been successfully cancelled and refund initiated.`,
+            usage: { promptTokens: 45, completionTokens: 25, totalTokens: 70 },
+            model: this.config.model || "mock-model-v1",
+          };
+        } else {
+          return {
+            content: parsed.error || parsed.message || "Failed to cancel order.",
+            usage: { promptTokens: 30, completionTokens: 15, totalTokens: 45 },
+            model: this.config.model || "mock-model-v1",
+          };
+        }
+      }
+
       return {
         content: "I have retrieved the requested information from our store systems.",
         usage: { promptTokens: 30, completionTokens: 15, totalTokens: 45 },
         model: this.config.model || "mock-model-v1",
       };
-    }
-
-    // 2. Find the last user message
-    const lastUserMessage = [...messages]
-      .reverse()
-      .find((m) => m.role === "user")?.content || "";
-
-    const lower = lastUserMessage.toLowerCase();
-
-    // 3. Check if custom tool call was configured
-    for (const [key, toolCall] of this.customToolCalls.entries()) {
-      if (lower.includes(key)) {
-        return {
-          content: "",
-          toolCalls: Array.isArray(toolCall) ? toolCall : [toolCall],
-          usage: { promptTokens: 45, completionTokens: 25, totalTokens: 70 },
-          model: this.config.model || "mock-model-v1",
-        };
-      }
     }
 
     // 4. Check if query implies a standard tool call in tests or interactive chat
@@ -299,6 +355,118 @@ export class MockLLMProvider extends LLMProvider {
           },
         ],
         usage: { promptTokens: 45, completionTokens: 25, totalTokens: 70 },
+        model: this.config.model || "mock-model-v1",
+      };
+    }
+
+    if (lower.includes("cancel order") || lower.includes("cancel my order")) {
+      const match = lower.match(/(?:order\s*(?:#|number|id)?\s*)([a-z0-9-]+)/i);
+      const orderId = match ? match[1].trim() : "64f1b2c3d4e5f6a7b8c90001";
+      return {
+        content: "",
+        toolCalls: [
+          {
+            id: "call_mock_cancel_order",
+            type: "function",
+            function: {
+              name: "cancel_order",
+              arguments: JSON.stringify({ orderId, reason: "Customer requested cancellation via chat" }),
+            },
+          },
+        ],
+        usage: { promptTokens: 45, completionTokens: 20, totalTokens: 65 },
+        model: this.config.model || "mock-model-v1",
+      };
+    }
+
+    if (lower.includes("update quantity") || lower.includes("change quantity") || lower.includes("set quantity")) {
+      const match = lower.match(/(?:to\s*)(\d+)/i);
+      const qty = match ? parseInt(match[1], 10) : 2;
+      return {
+        content: "",
+        toolCalls: [
+          {
+            id: "call_mock_update_qty",
+            type: "function",
+            function: {
+              name: "update_cart_quantity",
+              arguments: JSON.stringify({ productId: "64f2b1a2b3c4d5e6f7a8b001", quantity: qty }),
+            },
+          },
+        ],
+        usage: { promptTokens: 40, completionTokens: 20, totalTokens: 60 },
+        model: this.config.model || "mock-model-v1",
+      };
+    }
+
+    if (lower.includes("add to wishlist") || lower.includes("save to wishlist") || lower.includes("add this to my wishlist")) {
+      return {
+        content: "",
+        toolCalls: [
+          {
+            id: "call_mock_add_wishlist",
+            type: "function",
+            function: {
+              name: "add_to_wishlist",
+              arguments: JSON.stringify({ productId: "64f2b1a2b3c4d5e6f7a8b001" }),
+            },
+          },
+        ],
+        usage: { promptTokens: 35, completionTokens: 15, totalTokens: 50 },
+        model: this.config.model || "mock-model-v1",
+      };
+    }
+
+    if (lower.includes("remove from wishlist")) {
+      return {
+        content: "",
+        toolCalls: [
+          {
+            id: "call_mock_remove_wishlist",
+            type: "function",
+            function: {
+              name: "remove_from_wishlist",
+              arguments: JSON.stringify({ productId: "64f2b1a2b3c4d5e6f7a8b001" }),
+            },
+          },
+        ],
+        usage: { promptTokens: 35, completionTokens: 15, totalTokens: 50 },
+        model: this.config.model || "mock-model-v1",
+      };
+    }
+
+    if (lower.includes("in stock") || lower.includes("check stock") || lower.includes("product availability")) {
+      return {
+        content: "",
+        toolCalls: [
+          {
+            id: "call_mock_check_avail",
+            type: "function",
+            function: {
+              name: "check_product_availability",
+              arguments: JSON.stringify({ productId: "64f2b1a2b3c4d5e6f7a8b001" }),
+            },
+          },
+        ],
+        usage: { promptTokens: 35, completionTokens: 15, totalTokens: 50 },
+        model: this.config.model || "mock-model-v1",
+      };
+    }
+
+    if (lower.includes("my profile") || lower.includes("user profile") || lower.includes("my account details")) {
+      return {
+        content: "",
+        toolCalls: [
+          {
+            id: "call_mock_profile",
+            type: "function",
+            function: {
+              name: "get_user_profile",
+              arguments: JSON.stringify({}),
+            },
+          },
+        ],
+        usage: { promptTokens: 35, completionTokens: 15, totalTokens: 50 },
         model: this.config.model || "mock-model-v1",
       };
     }

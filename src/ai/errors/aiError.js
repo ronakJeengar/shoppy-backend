@@ -61,4 +61,31 @@ export class AiError extends Error {
       403
     );
   }
+
+  static toolTimeout(toolName, timeoutMs) {
+    return new AiError(
+      "AI_TOOL_TIMEOUT",
+      `Tool '${toolName}' timed out after ${timeoutMs}ms`,
+      { toolName, timeoutMs },
+      504
+    );
+  }
+
+  static toolValidationError(toolName, reason) {
+    return new AiError(
+      "AI_TOOL_VALIDATION_ERROR",
+      `Input validation failed for tool '${toolName}': ${reason}`,
+      { toolName, reason },
+      400
+    );
+  }
+
+  static confirmationRequired(toolName, confirmationData = {}) {
+    return new AiError(
+      "AI_CONFIRMATION_REQUIRED",
+      `Tool '${toolName}' requires explicit user confirmation`,
+      { toolName, ...confirmationData },
+      400
+    );
+  }
 }

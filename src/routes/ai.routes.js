@@ -6,6 +6,8 @@ import {
   getConversationById,
   deleteConversation,
   clearConversationMessages,
+  confirmPendingAction,
+  cancelPendingAction,
 } from "../controllers/conversation.controller.js";
 import { retrieveKnowledge } from "../controllers/knowledge.controller.js";
 import { optionalJWT, verifyJWT } from "../middlewares/auth.middleware.js";
@@ -20,6 +22,10 @@ router.post("/query", optionalJWT, queryAi);
 
 // Conversational AI Shopping Assistant endpoint
 router.post("/chat", optionalJWT, chatWithAssistant);
+
+// Action Confirmation & Consequential Operations (Phase 15)
+router.post("/assistant/confirm", verifyJWT, confirmPendingAction);
+router.post("/assistant/cancel-action", verifyJWT, cancelPendingAction);
 
 // Conversation management endpoints
 router.get("/conversations", verifyJWT, getConversations);

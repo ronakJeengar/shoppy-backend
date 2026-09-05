@@ -21,6 +21,7 @@ export class RemoveFromCartTool extends AITool {
       },
       requiresAuth: true,
       allowedRoles: ["CUSTOMER", "USER", "ADMIN"],
+      sideEffectType: "WRITE",
     });
   }
 

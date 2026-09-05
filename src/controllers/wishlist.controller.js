@@ -5,7 +5,8 @@ import { ApiError } from "../utils/apiError.js";
 import { ApiResponse } from "../utils/apiResponse.js";
 import { asyncHandler } from "../utils/asyncHandler.js";
 
-const memoryWishlists = new Map();
+// In-memory test store for when MongoDB is disconnected during tests
+export const memoryWishlists = new Map();
 
 const fallbackCatalog = [
   {
