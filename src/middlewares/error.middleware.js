@@ -43,7 +43,11 @@ const errorMiddleware = (err, req, res, next) => {
       message = "Authentication token expired. Please refresh your session.";
     }
 
+    const errorCode = error.code;
     error = new ApiError(statusCode, message, errors, error.stack);
+    if (errorCode) {
+      error.code = errorCode;
+    }
   }
 
   const response = {
@@ -51,6 +55,7 @@ const errorMiddleware = (err, req, res, next) => {
     statusCode: error.statusCode || 500,
     message: error.message || "An unexpected error occurred",
     errors: error.errors || [],
+    ...(error.code && { code: error.code }),
     ...(process.env.NODE_ENV === "development" && { stack: error.stack }),
   };
 

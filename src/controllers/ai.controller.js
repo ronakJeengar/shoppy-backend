@@ -1,4 +1,6 @@
 import { defaultAiService } from "../ai/services/aiService.js";
+import { isFeatureEnabled } from "../ai/config/ai.config.js";
+import { AiError } from "../ai/errors/aiError.js";
 import { ApiResponse } from "../utils/apiResponse.js";
 import { ApiError } from "../utils/apiError.js";
 import { asyncHandler } from "../utils/asyncHandler.js";
@@ -23,6 +25,10 @@ export const getAiHealth = asyncHandler(async (req, res) => {
  * Accepts user messages, applies safety & data minimization, and returns response.
  */
 export const queryAi = asyncHandler(async (req, res) => {
+  if (!isFeatureEnabled("assistantEnabled")) {
+    throw AiError.disabled("AI shopping assistant is currently disabled");
+  }
+
   const { message, history = [], options = {} } = req.body;
 
   if (!message || typeof message !== "string" || !message.trim()) {

@@ -3,6 +3,7 @@ import { ApiResponse } from "../utils/apiResponse.js";
 import { ApiError } from "../utils/apiError.js";
 import { defaultRecommendationService } from "../ai/recommendations/recommendation.service.js";
 import { defaultInteractionService } from "../ai/recommendations/interaction.service.js";
+import { isFeatureEnabled } from "../ai/config/ai.config.js";
 
 /**
  * GET /api/v1/recommendations
@@ -33,54 +34,101 @@ export const getRecommendations = asyncHandler(async (req, res) => {
       : []
   );
 
-  let result = null;
-
-  switch (type.toLowerCase()) {
-    case "similar":
-      if (!productId) {
-        throw new ApiError(400, "productId is required for similar recommendations");
-      }
-      result = await defaultRecommendationService.getSimilarProducts(productId, {
-        limit: parsedLimit,
-        excludeProductIds: excludeSet,
-      });
-      break;
-
-    case "frequently_bought_together":
-      if (!productId) {
-        throw new ApiError(
-          400,
-          "productId is required for frequently_bought_together recommendations"
-        );
-      }
-      result = await defaultRecommendationService.getFrequentlyBoughtTogether(productId, {
-        limit: parsedLimit,
-        excludeProductIds: excludeSet,
-      });
-      break;
-
-    case "trending":
-      result = await defaultRecommendationService.getTrending({
+  // Kill Switch & Degradation Guard: Fall back gracefully to trending catalog if disabled
+  if (!isFeatureEnabled("recommendationsEnabled")) {
+    const fallback = await defaultRecommendationService
+      .getTrending({
         categoryId: categoryId || null,
         limit: parsedLimit,
         excludeProductIds: excludeSet,
-      });
-      break;
+      })
+      .catch(() => ({
+        recommendationType: "FALLBACK",
+        reason: "Popular store items",
+        count: 0,
+        products: [],
+        metadata: { disabled: true },
+      }));
 
-    case "recently_viewed":
-      result = await defaultRecommendationService.getRecentlyViewed(userId, {
-        limit: parsedLimit,
-      });
-      break;
+    return res
+      .status(200)
+      .json(
+        new ApiResponse(
+          200,
+          fallback,
+          "Recommendations retrieved successfully (Fallback)"
+        )
+      );
+  }
 
-    case "personalized":
-    default:
-      result = await defaultRecommendationService.getPersonalized({
-        userId,
+  let result = null;
+
+  try {
+    switch (type.toLowerCase()) {
+      case "similar":
+        if (!productId) {
+          throw new ApiError(400, "productId is required for similar recommendations");
+        }
+        result = await defaultRecommendationService.getSimilarProducts(productId, {
+          limit: parsedLimit,
+          excludeProductIds: excludeSet,
+        });
+        break;
+
+      case "frequently_bought_together":
+        if (!productId) {
+          throw new ApiError(
+            400,
+            "productId is required for frequently_bought_together recommendations"
+          );
+        }
+        result = await defaultRecommendationService.getFrequentlyBoughtTogether(productId, {
+          limit: parsedLimit,
+          excludeProductIds: excludeSet,
+        });
+        break;
+
+      case "trending":
+        result = await defaultRecommendationService.getTrending({
+          categoryId: categoryId || null,
+          limit: parsedLimit,
+          excludeProductIds: excludeSet,
+        });
+        break;
+
+      case "recently_viewed":
+        result = await defaultRecommendationService.getRecentlyViewed(userId, {
+          limit: parsedLimit,
+        });
+        break;
+
+      case "personalized":
+      default:
+        result = await defaultRecommendationService.getPersonalized({
+          userId,
+          limit: parsedLimit,
+          excludeProductIds: excludeSet,
+        });
+        break;
+    }
+  } catch (err) {
+    if (err instanceof ApiError && err.statusCode < 500) {
+      throw err;
+    }
+    // Unexpected failure: gracefully degrade to trending products
+    result = await defaultRecommendationService
+      .getTrending({
+        categoryId: categoryId || null,
         limit: parsedLimit,
         excludeProductIds: excludeSet,
-      });
-      break;
+      })
+      .catch(() => ({
+        recommendationType: "FALLBACK",
+        reason: "Popular store items",
+        count: 0,
+        products: [],
+        metadata: { degraded: true },
+      }));
   }
 
   return res

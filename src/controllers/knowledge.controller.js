@@ -5,6 +5,8 @@ import {
   memoryKnowledgeStore,
 } from "../ai/rag/knowledgeIngestionService.js";
 import { KnowledgeDocument } from "../models/knowledge_document.model.js";
+import { isFeatureEnabled } from "../ai/config/ai.config.js";
+import { AiError } from "../ai/errors/aiError.js";
 import { ApiResponse } from "../utils/apiResponse.js";
 import { ApiError } from "../utils/apiError.js";
 import { asyncHandler } from "../utils/asyncHandler.js";
@@ -13,6 +15,10 @@ import { asyncHandler } from "../utils/asyncHandler.js";
  * Public RAG retrieval endpoint for semantic knowledge queries.
  */
 export const retrieveKnowledge = asyncHandler(async (req, res) => {
+  if (!isFeatureEnabled("ragEnabled")) {
+    throw AiError.disabled("RAG knowledge capabilities are currently disabled");
+  }
+
   const query = req.body.query || req.query.q || req.query.query;
   const sourceType = req.body.sourceType || req.query.sourceType;
   const topK = parseInt(req.body.topK || req.query.topK, 10) || 5;

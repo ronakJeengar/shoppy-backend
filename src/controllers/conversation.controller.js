@@ -3,6 +3,8 @@ import { Conversation, memoryConversations } from "../models/conversation.model.
 import { defaultAiService } from "../ai/services/aiService.js";
 import { defaultConfirmationService } from "../ai/services/confirmation.service.js";
 import { defaultToolRegistry } from "../ai/tools/tool.registry.js";
+import { isFeatureEnabled } from "../ai/config/ai.config.js";
+import { AiError } from "../ai/errors/aiError.js";
 import { ApiError } from "../utils/apiError.js";
 import { ApiResponse } from "../utils/apiResponse.js";
 import { asyncHandler } from "../utils/asyncHandler.js";
@@ -12,6 +14,10 @@ import { asyncHandler } from "../utils/asyncHandler.js";
  * Integrates multi-turn conversation persistence, tool execution, and structured UI components.
  */
 export const chatWithAssistant = asyncHandler(async (req, res) => {
+  if (!isFeatureEnabled("assistantEnabled")) {
+    throw AiError.disabled("AI shopping assistant is currently disabled");
+  }
+
   const { message, conversationId, options = {} } = req.body;
 
   if (!message || typeof message !== "string" || !message.trim()) {
@@ -388,6 +394,10 @@ export const clearConversationMessages = asyncHandler(async (req, res) => {
  * Requires valid confirmationId and authenticated customer context.
  */
 export const confirmPendingAction = asyncHandler(async (req, res) => {
+  if (!isFeatureEnabled("assistantEnabled")) {
+    throw AiError.disabled("AI shopping assistant is currently disabled");
+  }
+
   const { confirmationId, conversationId } = req.body;
   const userId = req.user?._id ? req.user._id.toString() : null;
 
@@ -475,6 +485,10 @@ export const confirmPendingAction = asyncHandler(async (req, res) => {
  * Cancel a pending consequential action: POST /api/v1/ai/assistant/cancel-action
  */
 export const cancelPendingAction = asyncHandler(async (req, res) => {
+  if (!isFeatureEnabled("assistantEnabled")) {
+    throw AiError.disabled("AI shopping assistant is currently disabled");
+  }
+
   const { confirmationId } = req.body;
   const userId = req.user?._id ? req.user._id.toString() : null;
 

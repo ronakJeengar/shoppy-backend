@@ -1,5 +1,5 @@
 import mongoose from "mongoose";
-import { aiConfig } from "../config/ai.config.js";
+import { aiConfig, isFeatureEnabled } from "../config/ai.config.js";
 import { defaultProductSearchIndex } from "./productSearchIndex.js";
 import { QueryProcessor } from "./queryProcessor.js";
 import { Product } from "../../models/product.model.js";
@@ -95,8 +95,7 @@ export class HybridSearchEngine {
     const skip = (pageNum - 1) * limitNum;
 
     // 2. Check if Semantic Search is Enabled & Available
-    const isSemanticConfigured =
-      aiConfig.enabled && aiConfig.features.semanticSearchEnabled;
+    const isSemanticConfigured = isFeatureEnabled("semanticSearchEnabled");
 
     let semanticMap = new Map();
     let semanticAttempted = false;

@@ -1,4 +1,4 @@
-import { aiConfig } from "../config/ai.config.js";
+import { aiConfig, isAiEnabled, isFeatureEnabled } from "../config/ai.config.js";
 import { AiError } from "../errors/aiError.js";
 import { getDefaultLLMProvider } from "../providers/provider.factory.js";
 import { defaultToolRegistry } from "../tools/tool.registry.js";
@@ -72,8 +72,8 @@ export class AiService {
     const provider = this._getProvider();
 
     // 1. Check Feature Flag
-    if (!aiConfig.enabled) {
-      throw AiError.disabled();
+    if (!isAiEnabled() || !isFeatureEnabled("assistantEnabled")) {
+      throw AiError.disabled("AI shopping assistant is currently disabled");
     }
 
     // 2. Input Validation & Safety Check
@@ -101,11 +101,13 @@ export class AiService {
     const retrievedContext = await this.contextBuilder.buildContext({
       query: sanitizedMessage,
       user,
-      includeKnowledge: true,
+      includeKnowledge: isFeatureEnabled("ragEnabled"),
     });
 
     // 4. Discover Allowlisted Tools Accessible to this User Context
-    const availableTools = this.toolRegistry.getAvailableToolDefinitions({ user });
+    const availableTools = isFeatureEnabled("toolCallingEnabled")
+      ? this.toolRegistry.getAvailableToolDefinitions({ user })
+      : [];
 
     // 5. Build Formatted Prompt with Strict Trust Boundaries
     const { promptVersion, messages } = buildPromptMessages({
