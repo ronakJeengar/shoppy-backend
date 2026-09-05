@@ -24,6 +24,15 @@ import {
   getAdminReviews,
   updateReviewStatus,
 } from "../controllers/review.controller.js";
+import {
+  getAdminKnowledgeDocuments,
+  createAdminKnowledgeDocument,
+  getAdminKnowledgeDocumentById,
+  updateAdminKnowledgeDocument,
+  deleteAdminKnowledgeDocument,
+  reindexAdminKnowledge,
+} from "../controllers/knowledge.controller.js";
+
 
 const router = Router();
 
@@ -65,4 +74,13 @@ router.get("/audit-logs", getAdminAuditLogs);
 router.get("/reviews", getAdminReviews);
 router.patch("/reviews/:id/status", updateReviewStatus);
 
+// 8. RAG Knowledge Management
+router.get("/knowledge", getAdminKnowledgeDocuments);
+router.post("/knowledge", createAdminKnowledgeDocument);
+router.post("/knowledge/reindex", reindexAdminKnowledge);
+router.get("/knowledge/:id", getAdminKnowledgeDocumentById);
+router.patch("/knowledge/:id", updateAdminKnowledgeDocument);
+router.delete("/knowledge/:id", deleteAdminKnowledgeDocument);
+
 export default router;
+

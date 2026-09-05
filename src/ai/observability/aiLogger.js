@@ -96,3 +96,61 @@ export const logSearchEvent = ({
     },
   });
 };
+
+export const logRagIngestionEvent = ({
+  documentId = "",
+  title = "",
+  sourceType = "POLICY",
+  chunkCount = 0,
+  isIdempotentSkip = false,
+  durationMs = 0,
+  success = true,
+  error = null,
+}) => {
+  return logAiEvent({
+    event: isIdempotentSkip
+      ? "RAG_INGESTION_SKIPPED_IDEMPOTENT"
+      : "RAG_INGESTION_COMPLETED",
+    provider: "rag_ingestion",
+    model: "chunker_v1",
+    durationMs,
+    success,
+    error,
+    metadata: {
+      documentId: String(documentId || ""),
+      title: sanitizeAiText(title || ""),
+      sourceType,
+      chunkCount,
+      isIdempotentSkip,
+    },
+  });
+};
+
+export const logRagRetrievalEvent = ({
+  query = "",
+  sourceType = null,
+  visibility = "PUBLIC",
+  candidateCount = 0,
+  resultCount = 0,
+  durationMs = 0,
+  success = true,
+  error = null,
+}) => {
+  return logAiEvent({
+    event: "RAG_RETRIEVAL_COMPLETED",
+    provider: "knowledge_retriever",
+    model: "vector_similarity",
+    durationMs,
+    success,
+    error,
+    metadata: {
+      query: sanitizeAiText(query),
+      sourceType,
+      visibility,
+      candidateCount,
+      resultCount,
+      zeroResults: resultCount === 0,
+    },
+  });
+};
+

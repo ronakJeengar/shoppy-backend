@@ -1,5 +1,6 @@
 import { Router } from "express";
 import { getAiHealth, queryAi } from "../controllers/ai.controller.js";
+import { retrieveKnowledge } from "../controllers/knowledge.controller.js";
 import { optionalJWT } from "../middlewares/auth.middleware.js";
 
 const router = Router();
@@ -11,4 +12,9 @@ router.get("/health", getAiHealth);
 router.post("/query", optionalJWT, queryAi);
 router.post("/chat", optionalJWT, queryAi);
 
+// RAG Knowledge retrieval endpoints
+router.post("/knowledge/retrieve", optionalJWT, retrieveKnowledge);
+router.get("/knowledge/search", optionalJWT, retrieveKnowledge);
+
 export default router;
+
