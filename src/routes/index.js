@@ -12,6 +12,7 @@ import orderRouter from "./order.routes.js";
 import notificationRouter from "./notification.routes.js";
 import adminRouter from "./admin.routes.js";
 import reviewRouter from "./review.routes.js";
+import aiRouter from "./ai.routes.js";
 import {
   registerUser,
   loginUser,
@@ -56,6 +57,7 @@ router.use("/orders", orderRouter);
 router.use("/notifications", notificationRouter);
 router.use("/admin", adminRouter);
 router.use(reviewRouter);
+router.use("/ai", aiRouter);
 
 // Backwards-compatibility aliases for legacy client endpoints
 router.post("/signUp", registerUser);

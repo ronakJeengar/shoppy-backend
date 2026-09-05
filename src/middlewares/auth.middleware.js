@@ -67,3 +67,44 @@ export const requireRole = (allowedRoles = []) => {
     next();
   };
 };
+
+export const optionalJWT = asyncHandler(async (req, res, next) => {
+  const token =
+    req.header("Authorization")?.replace("Bearer ", "") ||
+    req.cookies?.accessToken ||
+    req.header("x-auth-token");
+
+  if (!token) {
+    req.user = null;
+    return next();
+  }
+
+  try {
+    const secret =
+      process.env.ACCESS_TOKEN_KEY ||
+      "shoppy_access_token_secret_key_development_example";
+    const decodedToken = jwt.verify(token, secret);
+
+    let user = null;
+    if (mongoose.connection.readyState === 1) {
+      user = await User.findById(decodedToken?._id).select("-password");
+    } else {
+      user = {
+        _id: decodedToken?._id || "64f1a2b3c4d5e6f7a8b9c999",
+        email: decodedToken?.email || "test@example.com",
+        fullName: decodedToken?.fullName || decodedToken?.fullname || "Test User",
+        fullname: decodedToken?.fullName || decodedToken?.fullname || "Test User",
+        role: decodedToken?.role || "USER",
+      };
+    }
+
+    if (user && user.isActive !== false) {
+      req.user = user;
+    } else {
+      req.user = null;
+    }
+  } catch (error) {
+    req.user = null;
+  }
+  next();
+});
