@@ -6,7 +6,7 @@ import { ApiResponse } from "../utils/apiResponse.js";
 import { asyncHandler } from "../utils/asyncHandler.js";
 
 // In-memory test store for when MongoDB is disconnected during tests
-const memoryCarts = new Map();
+export const memoryCarts = new Map();
 
 // Sample product lookup for test mode
 const fallbackCatalog = [

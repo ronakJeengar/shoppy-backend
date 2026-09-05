@@ -59,13 +59,15 @@ export class SearchProductsTool extends AITool {
       return {
         count: products.length,
         results: products.map((p) => ({
-          id: p._id,
+          id: p._id.toString(),
           name: p.productName,
           price: p.price,
           inStock: p.stock > 0,
           stockCount: p.stock,
-          rating: p.productRating,
+          rating: p.productRating || 0,
           seller: p.sellerName,
+          productImage: p.productImage || "",
+          description: p.description || "",
         })),
       };
     } else {
@@ -88,13 +90,15 @@ export class SearchProductsTool extends AITool {
       return {
         count: sliced.length,
         results: sliced.map((p) => ({
-          id: p._id || p.id,
+          id: (p._id || p.id).toString(),
           name: p.productName,
           price: p.price,
           inStock: (p.stock || 0) > 0,
           stockCount: p.stock || 0,
           rating: p.productRating || 0,
           seller: p.sellerName || "Store",
+          productImage: p.productImage || "",
+          description: p.description || "",
         })),
       };
     }

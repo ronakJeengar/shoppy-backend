@@ -33,6 +33,7 @@ export class AiService {
 
   /**
    * Primary entry point for AI conversational or task requests.
+   * Executes multi-turn agent tool loop and formats structured assistant outputs.
    */
   async processRequest({
     message,
@@ -89,36 +90,52 @@ export class AiService {
       history,
     });
 
-    // 6. Invoke LLM Provider with Timeout & Safety Bounds
-    let rawResponse = null;
-    try {
-      rawResponse = await provider.generateResponse({
-        messages,
-        tools: availableTools,
-        options: {
-          timeoutMs: options.timeoutMs || aiConfig.timeoutMs,
-          temperature: options.temperature ?? aiConfig.temperature,
-          maxTokens: options.maxTokens || aiConfig.maxTokens,
-        },
-      });
-    } catch (err) {
-      const durationMs = Date.now() - startTime;
-      logAiEvent({
-        requestId,
-        event: "LLM_PROVIDER_ERROR",
-        provider: provider.providerName,
-        model: provider.model || aiConfig.model,
-        durationMs,
-        success: false,
-        error: err,
-      });
-      throw err;
-    }
+    // 6. Multi-turn Agent Tool Calling Loop (bounded at max 3 iterations)
+    let currentRawResponse = null;
+    let iteration = 0;
+    const maxIterations = 3;
+    const allExecutedToolResults = [];
 
-    // 7. Execute Tools if Requested by LLM
-    const executedToolResults = [];
-    if (rawResponse.toolCalls && rawResponse.toolCalls.length > 0) {
-      for (const call of rawResponse.toolCalls) {
+    while (iteration < maxIterations) {
+      iteration++;
+
+      try {
+        currentRawResponse = await provider.generateResponse({
+          messages,
+          tools: availableTools,
+          options: {
+            timeoutMs: options.timeoutMs || aiConfig.timeoutMs,
+            temperature: options.temperature ?? aiConfig.temperature,
+            maxTokens: options.maxTokens || aiConfig.maxTokens,
+          },
+        });
+      } catch (err) {
+        const durationMs = Date.now() - startTime;
+        logAiEvent({
+          requestId,
+          event: "LLM_PROVIDER_ERROR",
+          provider: provider.providerName,
+          model: provider.model || aiConfig.model,
+          durationMs,
+          success: false,
+          error: err,
+        });
+        throw err;
+      }
+
+      // If no tool calls requested, we have our final text!
+      if (!currentRawResponse.toolCalls || currentRawResponse.toolCalls.length === 0) {
+        break;
+      }
+
+      // Execute tool calls
+      messages.push({
+        role: "assistant",
+        content: currentRawResponse.content || "",
+        tool_calls: currentRawResponse.toolCalls,
+      });
+
+      for (const call of currentRawResponse.toolCalls) {
         const toolName = call.function?.name;
         const toolArgs = call.function?.arguments;
 
@@ -128,32 +145,186 @@ export class AiService {
             requestId,
           });
 
-          executedToolResults.push({
+          allExecutedToolResults.push({
             toolCallId: call.id,
             toolName,
             args: toolArgs,
             result,
           });
+
+          messages.push({
+            role: "tool",
+            tool_call_id: call.id,
+            name: toolName,
+            content: JSON.stringify(result || {}),
+          });
         } catch (toolErr) {
-          executedToolResults.push({
+          allExecutedToolResults.push({
             toolCallId: call.id,
             toolName,
             error: toolErr.message,
+          });
+
+          messages.push({
+            role: "tool",
+            tool_call_id: call.id,
+            name: toolName,
+            content: JSON.stringify({ error: toolErr.message }),
           });
         }
       }
     }
 
-    // 8. Validate & Sanitize Output
-    const validation = validateStructuredResponse(rawResponse);
+    // 7. Validate & Sanitize Output
+    const validation = validateStructuredResponse(currentRawResponse);
     if (!validation.isValid) {
       throw new AiError("AI_INVALID_RESPONSE", validation.reason, {}, 502);
     }
 
     const durationMs = Date.now() - startTime;
-    let finalContent = sanitizeAiText(rawResponse.content || "");
-    if (!finalContent && executedToolResults.length > 0) {
-      finalContent = `Executed ${executedToolResults.length} tool(s) successfully: ${executedToolResults.map((t) => t.toolName).join(", ")}.`;
+    let finalContent = sanitizeAiText(currentRawResponse.content || "");
+    if (!finalContent && allExecutedToolResults.length > 0) {
+      finalContent = `Executed ${allExecutedToolResults.length} tool(s) successfully: ${allExecutedToolResults.map((t) => t.toolName).join(", ")}.`;
+    }
+
+    // 8. Extract Structured Products, Sources & Contextual Actions
+    const products = [];
+    const sources = [];
+    const actions = [];
+    const seenProductIds = new Set();
+
+    for (const item of allExecutedToolResults) {
+      if (item.result) {
+        // Handle search_products
+        if (item.toolName === "search_products" && Array.isArray(item.result.results)) {
+          for (const p of item.result.results) {
+            const pId = (p.id || p._id || "").toString();
+            if (pId && !seenProductIds.has(pId)) {
+              seenProductIds.add(pId);
+              products.push({
+                id: pId,
+                name: p.name || p.productName || "Product",
+                price: typeof p.price === "number" ? p.price : 0,
+                inStock: p.inStock !== false,
+                stockCount: p.stockCount || 0,
+                rating: p.rating || 0,
+                seller: p.seller || "Store",
+                productImage: p.productImage || "",
+                description: p.description || "",
+              });
+            }
+          }
+        }
+
+        // Handle get_product_details
+        if (item.toolName === "get_product_details" && item.result.exists && item.result.id) {
+          const p = item.result;
+          const pId = p.id.toString();
+          if (!seenProductIds.has(pId)) {
+            seenProductIds.add(pId);
+            products.push({
+              id: pId,
+              name: p.name,
+              price: p.price,
+              inStock: p.inStock !== false,
+              stockCount: p.stockCount || 0,
+              rating: p.rating || 0,
+              seller: p.seller || "Store",
+              productImage: p.productImage || "",
+              description: p.description || "",
+            });
+          }
+        }
+
+        // Handle get_cart items
+        if (item.toolName === "get_cart" && Array.isArray(item.result.items)) {
+          for (const ci of item.result.items) {
+            const ciId = (ci.productId || ci.id || "").toString();
+            if (ciId && !seenProductIds.has(ciId)) {
+              seenProductIds.add(ciId);
+              products.push({
+                id: ciId,
+                name: ci.name,
+                price: ci.price,
+                inStock: ci.inStock !== false,
+                stockCount: ci.stockCount || 10,
+                rating: 0,
+                seller: ci.seller || "Store",
+                productImage: ci.productImage || "",
+                description: "",
+              });
+            }
+          }
+        }
+
+        // Handle search_knowledge
+        if (item.toolName === "search_knowledge" && Array.isArray(item.result.results)) {
+          for (const doc of item.result.results) {
+            sources.push({
+              chunkId: doc.chunkId,
+              title: doc.title,
+              section: doc.section,
+              sourceType: doc.sourceType,
+              content: doc.content,
+              citation: doc.citation,
+            });
+          }
+        }
+
+        // Handle check_store_policy
+        if (item.toolName === "check_store_policy" && item.result.topic) {
+          sources.push({
+            title: `Store Policy: ${item.result.topic}`,
+            section: item.result.topic,
+            sourceType: "POLICY",
+            content: JSON.stringify(item.result),
+            citation: { source: "Store Policy", topic: item.result.topic },
+          });
+        }
+      }
+    }
+
+    // Build Contextual Navigation Actions
+    if (products.length > 0) {
+      actions.push({
+        type: "OPEN_PRODUCT",
+        label: `View ${products[0].name.substring(0, 24)}`,
+        payload: { productId: products[0].id },
+      });
+      actions.push({
+        type: "OPEN_SEARCH",
+        label: "Search More Products",
+        payload: { query: sanitizedMessage },
+      });
+    }
+
+    const cartToolExecuted = allExecutedToolResults.some((t) =>
+      ["get_cart", "add_to_cart", "remove_from_cart"].includes(t.toolName)
+    );
+    if (cartToolExecuted) {
+      actions.push({
+        type: "OPEN_CART",
+        label: "View Shopping Cart",
+        payload: {},
+      });
+    }
+
+    const orderTool = allExecutedToolResults.find((t) =>
+      ["get_order_details", "get_user_order_status"].includes(t.toolName)
+    );
+    if (orderTool && (orderTool.result?.orderNumber || orderTool.result?.orderId)) {
+      const ordId = orderTool.result.orderId || orderTool.result.orderNumber;
+      actions.push({
+        type: "OPEN_ORDER",
+        label: `View Order ${orderTool.result.orderNumber || ordId}`,
+        payload: { orderId: ordId },
+      });
+    } else if (allExecutedToolResults.some((t) => t.toolName === "get_user_orders")) {
+      actions.push({
+        type: "OPEN_ORDERS",
+        label: "View All Orders",
+        payload: {},
+      });
     }
 
     // 9. Observability Telemetry
@@ -161,24 +332,29 @@ export class AiService {
       requestId,
       event: "AI_REQUEST_COMPLETED",
       provider: provider.providerName,
-      model: rawResponse.model || provider.model || aiConfig.model,
+      model: currentRawResponse.model || provider.model || aiConfig.model,
       durationMs,
-      tokenUsage: rawResponse.usage || { prompt: 0, completion: 0, total: 0 },
-      toolsCalled: executedToolResults.map((t) => t.toolName),
+      tokenUsage: currentRawResponse.usage || { prompt: 0, completion: 0, total: 0 },
+      toolsCalled: allExecutedToolResults.map((t) => t.toolName),
       success: true,
       metadata: {
         promptVersion,
-        toolsExecuted: executedToolResults.length,
+        toolsExecuted: allExecutedToolResults.length,
       },
     });
 
     return {
       requestId,
+      conversationId: options.conversationId || null,
+      message: finalContent,
       answer: finalContent,
-      toolResults: executedToolResults.length > 0 ? executedToolResults : undefined,
+      products,
+      sources,
+      actions,
+      toolResults: allExecutedToolResults.length > 0 ? allExecutedToolResults : undefined,
       metadata: {
         provider: provider.providerName,
-        model: rawResponse.model || provider.model || aiConfig.model,
+        model: currentRawResponse.model || provider.model || aiConfig.model,
         promptVersion,
         durationMs,
       },

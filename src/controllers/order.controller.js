@@ -18,7 +18,7 @@ const VALID_TRANSITIONS = {
 };
 
 // Offline in-memory orders store for tests and offline development
-const inMemoryOrders = new Map();
+export const inMemoryOrders = new Map();
 
 export const getUserOrders = asyncHandler(async (req, res) => {
   const page = Math.max(1, parseInt(req.query.page, 10) || 1);

@@ -2,6 +2,12 @@ import { SearchProductsTool } from "./searchProducts.tool.js";
 import { GetProductDetailsTool } from "./getProductDetails.tool.js";
 import { GetUserOrderStatusTool } from "./getUserOrderStatus.tool.js";
 import { CheckStorePolicyTool } from "./checkStorePolicy.tool.js";
+import { SearchKnowledgeTool } from "./searchKnowledge.tool.js";
+import { GetCartTool } from "./getCart.tool.js";
+import { AddToCartTool } from "./addToCart.tool.js";
+import { RemoveFromCartTool } from "./removeFromCart.tool.js";
+import { GetUserOrdersTool } from "./getUserOrders.tool.js";
+import { GetOrderDetailsTool } from "./getOrderDetails.tool.js";
 import { AiError } from "../errors/aiError.js";
 
 export class ToolRegistry {
@@ -81,3 +87,9 @@ defaultToolRegistry.registerTool(new SearchProductsTool());
 defaultToolRegistry.registerTool(new GetProductDetailsTool());
 defaultToolRegistry.registerTool(new GetUserOrderStatusTool());
 defaultToolRegistry.registerTool(new CheckStorePolicyTool());
+defaultToolRegistry.registerTool(new SearchKnowledgeTool());
+defaultToolRegistry.registerTool(new GetCartTool());
+defaultToolRegistry.registerTool(new AddToCartTool());
+defaultToolRegistry.registerTool(new RemoveFromCartTool());
+defaultToolRegistry.registerTool(new GetUserOrdersTool());
+defaultToolRegistry.registerTool(new GetOrderDetailsTool());
