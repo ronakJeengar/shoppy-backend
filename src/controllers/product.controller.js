@@ -296,6 +296,40 @@ export const getProducts = asyncHandler(async (req, res) => {
     productRating: p.productRating || 0,
     productImage: p.productImage,
     imageUrl: p.productImage,
+    images: p.images && p.images.length > 0 ? p.images : [p.productImage],
+    videoUrl: p.videoUrl || null,
+    model3dUrl: p.model3dUrl || null,
+    media:
+      p.media && p.media.length > 0
+        ? p.media
+        : [
+            {
+              type: "IMAGE",
+              url: p.productImage,
+              thumbnailUrl: p.productImage,
+              sortOrder: 0,
+            },
+            ...(p.videoUrl
+              ? [
+                  {
+                    type: "VIDEO",
+                    url: p.videoUrl,
+                    thumbnailUrl: p.productImage,
+                    sortOrder: 1,
+                  },
+                ]
+              : []),
+            ...(p.model3dUrl
+              ? [
+                  {
+                    type: "MODEL_3D",
+                    url: p.model3dUrl,
+                    thumbnailUrl: p.productImage,
+                    sortOrder: 2,
+                  },
+                ]
+              : []),
+          ],
     category: p.category
       ? {
           id: p.category._id,
@@ -426,6 +460,43 @@ export const getProductById = asyncHandler(async (req, res) => {
     productRating: product.productRating || 0,
     productImage: product.productImage,
     imageUrl: product.productImage,
+    images:
+      product.images && product.images.length > 0
+        ? product.images
+        : [product.productImage],
+    videoUrl: product.videoUrl || null,
+    model3dUrl: product.model3dUrl || null,
+    media:
+      product.media && product.media.length > 0
+        ? product.media
+        : [
+            {
+              type: "IMAGE",
+              url: product.productImage,
+              thumbnailUrl: product.productImage,
+              sortOrder: 0,
+            },
+            ...(product.videoUrl
+              ? [
+                  {
+                    type: "VIDEO",
+                    url: product.videoUrl,
+                    thumbnailUrl: product.productImage,
+                    sortOrder: 1,
+                  },
+                ]
+              : []),
+            ...(product.model3dUrl
+              ? [
+                  {
+                    type: "MODEL_3D",
+                    url: product.model3dUrl,
+                    thumbnailUrl: product.productImage,
+                    sortOrder: 2,
+                  },
+                ]
+              : []),
+          ],
     category: product.category
       ? {
           id: product.category._id,

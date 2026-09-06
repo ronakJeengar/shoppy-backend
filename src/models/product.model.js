@@ -48,6 +48,38 @@ const productSchema = new Schema(
       default: true,
       index: true,
     },
+    images: {
+      type: [String],
+      default: [],
+    },
+    videoUrl: {
+      type: String,
+      default: null,
+    },
+    model3dUrl: {
+      type: String,
+      default: null,
+    },
+    media: [
+      {
+        type: {
+          type: String,
+          enum: ["IMAGE", "VIDEO", "MODEL_3D"],
+          default: "IMAGE",
+        },
+        url: {
+          type: String,
+          required: true,
+        },
+        thumbnailUrl: {
+          type: String,
+        },
+        sortOrder: {
+          type: Number,
+          default: 0,
+        },
+      },
+    ],
   },
   {
     timestamps: true,
