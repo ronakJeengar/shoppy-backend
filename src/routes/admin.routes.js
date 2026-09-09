@@ -32,6 +32,10 @@ import {
   deleteAdminKnowledgeDocument,
   reindexAdminKnowledge,
 } from "../controllers/knowledge.controller.js";
+import {
+  getAdminAppConfig,
+  updateAdminAppConfig,
+} from "../controllers/app_config.controller.js";
 
 
 const router = Router();
@@ -81,6 +85,10 @@ router.post("/knowledge/reindex", reindexAdminKnowledge);
 router.get("/knowledge/:id", getAdminKnowledgeDocumentById);
 router.patch("/knowledge/:id", updateAdminKnowledgeDocument);
 router.delete("/knowledge/:id", deleteAdminKnowledgeDocument);
+
+// 9. Remote App Configuration Management
+router.get("/config", getAdminAppConfig);
+router.patch("/config", updateAdminAppConfig);
 
 export default router;
 
