@@ -14,9 +14,15 @@ import { Wishlist } from "../../models/wishlist.model.js";
 dotenv.config();
 
 export const seedDatabase = async () => {
+  // Guard: Never run destructive seed in production
+  if (process.env.NODE_ENV === "production") {
+    throw new Error("Cannot seed database in production environment!");
+  }
+
   console.log("🌱 Starting unified database seeding...");
 
-  // 1. Clear existing data
+  // 1. Clear existing non-user data & seeded dev users
+  // Note: Clears collections for a clean, deterministic development environment
   await Promise.all([
     Category.deleteMany({}),
     Product.deleteMany({}),
@@ -31,14 +37,16 @@ export const seedDatabase = async () => {
 
   console.log("🧹 Cleared all collections.");
 
-  // 2. Seed Categories
+  // 2. Seed Categories (Categories required by Shoppy spec)
   const categoryDocs = await Category.create([
     { name: "electronics" },
+    { name: "furniture" },
     { name: "fashion" },
-    { name: "home & living" },
-    { name: "sports & outdoors" },
+    { name: "home & kitchen" },
+    { name: "beauty" },
+    { name: "sports" },
+    { name: "accessories" },
     { name: "books & stationery" },
-    { name: "beauty & wellness" },
   ]);
 
   const catMap = {};
@@ -47,9 +55,9 @@ export const seedDatabase = async () => {
   }
   console.log(`📦 Seeded ${categoryDocs.length} categories.`);
 
-  // 3. Seed Products
+  // 3. Seed Products (38 realistic e-commerce products with varied stock: In Stock, Low Stock, Out of Stock)
   const productsData = [
-    // Electronics
+    // --- Electronics ---
     {
       productName: "Aura Pro Wireless Noise-Cancelling Headphones",
       sellerName: "Aura Audio Labs",
@@ -98,81 +106,149 @@ export const seedDatabase = async () => {
       description:
         "IP67 dustproof and waterproof cylindrical speaker delivering 360-degree immersive acoustic sound, punchy bass radiators, and built-in power bank functionality.",
       price: 89.95,
-      stock: 80,
+      stock: 4, // Low stock
       productRating: 4.7,
-      totalReviews: 76,
+      totalReviews: 52,
       productImage:
         "https://images.unsplash.com/photo-1608043152269-423dbba4e7e1?w=800&auto=format&fit=crop&q=80",
       images: [
         "https://images.unsplash.com/photo-1608043152269-423dbba4e7e1?w=800&auto=format&fit=crop&q=80",
         "https://images.unsplash.com/photo-1545454675-3531b543be5d?w=800&auto=format&fit=crop&q=80",
       ],
-      videoUrl:
-        "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerJoyBlazes.mp4",
       category: catMap["electronics"],
       isActive: true,
     },
     {
-      productName: "PixelStream 4K Ultra-HD Webcam",
-      sellerName: "VisionTech Pro",
+      productName: "PixelClear 4K HDR USB-C Monitor 27\"",
+      sellerName: "VisionTech Displays",
       description:
-        "Broadcast-grade 4K streaming webcam equipped with dual AI noise-canceling microphones, auto-framing focus, privacy shutter, and high dynamic range (HDR) sensor.",
-      price: 119.5,
-      stock: 35,
+        "Ultra-slim bezel 27-inch IPS display with 99% DCI-P3 color accuracy, HDR400 certified, 90W power delivery over USB-C, and ergonomic pivot stand.",
+      price: 389.0,
+      stock: 0, // Out of stock
       productRating: 4.6,
-      totalReviews: 45,
+      totalReviews: 38,
       productImage:
-        "https://images.unsplash.com/photo-1588872657578-7efd1f1555ed?w=800&auto=format&fit=crop&q=80",
+        "https://images.unsplash.com/photo-1527443224154-c4a3942d3acf?w=800&auto=format&fit=crop&q=80",
       images: [
-        "https://images.unsplash.com/photo-1588872657578-7efd1f1555ed?w=800&auto=format&fit=crop&q=80",
+        "https://images.unsplash.com/photo-1527443224154-c4a3942d3acf?w=800&auto=format&fit=crop&q=80",
       ],
+      category: catMap["electronics"],
+      isActive: true,
+    },
+    {
+      productName: "SonicBeam Magnetic Wireless Power Bank 10000mAh",
+      sellerName: "PowerLink Labs",
+      description:
+        "Pocket-sized Qi2 magnetic wireless battery pack with kickstand, 20W PD fast-charging USB-C port, and LED battery display.",
+      price: 45.5,
+      stock: 65,
+      productRating: 4.7,
+      totalReviews: 81,
+      productImage:
+        "https://images.unsplash.com/photo-1609592807664-84d5df68b6b1?w=800&auto=format&fit=crop&q=80",
       category: catMap["electronics"],
       isActive: true,
     },
 
-    // Fashion
+    // --- Furniture ---
     {
-      productName: "Heritage Full-Grain Leather Weekender Bag",
-      sellerName: "Artisan & Hide",
+      productName: "Ergonomic Mesh High-Back Executive Chair",
+      sellerName: "Nordic Posture",
       description:
-        "Handcrafted vegetable-tanned Italian leather duffel featuring solid brass hardware, reinforced luggage handles, a dedicated shoe compartment, and waterproof lining.",
-      price: 185.0,
-      stock: 24,
-      productRating: 4.9,
-      totalReviews: 52,
+        "Breathable elastomeric mesh task chair with 4D adjustable armrests, adaptive lumbar support, smooth synchronous tilt, and aluminum base.",
+      price: 229.0,
+      stock: 15,
+      productRating: 4.8,
+      totalReviews: 62,
       productImage:
-        "https://images.unsplash.com/photo-1553062407-98eeb64c6a62?w=800&auto=format&fit=crop&q=80",
-      images: [
-        "https://images.unsplash.com/photo-1553062407-98eeb64c6a62?w=800&auto=format&fit=crop&q=80",
-        "https://images.unsplash.com/photo-1548036328-c9fa89d128fa?w=800&auto=format&fit=crop&q=80",
-      ],
-      videoUrl:
-        "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerMeltdowns.mp4",
-      category: catMap["fashion"],
+        "https://images.unsplash.com/photo-1580481077195-c3a821458312?w=800&auto=format&fit=crop&q=80",
+      category: catMap["furniture"],
       isActive: true,
     },
     {
-      productName: "Organic Pima Cotton Relaxed Crewneck",
-      sellerName: "Nordic Loom",
+      productName: "Mid-Century Modern Solid Walnut Coffee Table",
+      sellerName: "Hygge Living",
       description:
-        "Sustainably harvested 100% organic Peruvian Pima cotton tee with a buttery-soft hand feel, reinforced collar, and tailored drape.",
-      price: 38.0,
-      stock: 150,
+        "Organic surfboard silhouette coffee table crafted from sustainably sourced American walnut with beveled edges and tapered splayed legs.",
+      price: 189.5,
+      stock: 8, // Low stock
       productRating: 4.7,
+      totalReviews: 29,
+      productImage:
+        "https://images.unsplash.com/photo-1533090161767-e6ffed986c88?w=800&auto=format&fit=crop&q=80",
+      category: catMap["furniture"],
+      isActive: true,
+    },
+    {
+      productName: "Minimalist Floating Wall Shelf Trio",
+      sellerName: "Hygge Living",
+      description:
+        "Set of 3 heavy-duty concealed-bracket floating shelves in natural blonde birch. Ideal for books, plants, and accent decor.",
+      price: 54.0,
+      stock: 0, // Out of stock
+      productRating: 4.5,
+      totalReviews: 19,
+      productImage:
+        "https://images.unsplash.com/photo-1594026112284-02bb6f3352fe?w=800&auto=format&fit=crop&q=80",
+      category: catMap["furniture"],
+      isActive: true,
+    },
+    {
+      productName: "Scandinavian Solid Oak Nightstand",
+      sellerName: "Nordic Posture",
+      description:
+        "Compact bed-side companion with soft-close dovetailed drawer, open lower shelf for books, and integrated cable pass-through.",
+      price: 119.0,
+      stock: 22,
+      productRating: 4.6,
+      totalReviews: 34,
+      productImage:
+        "https://images.unsplash.com/photo-1532372320572-cda25653a26d?w=800&auto=format&fit=crop&q=80",
+      category: catMap["furniture"],
+      isActive: true,
+    },
+    {
+      productName: "Adjustable Solid Bamboo Standing Desk Converter",
+      sellerName: "Nordic Posture",
+      description:
+        "Pneumatic gas-spring riser transforming any tabletop into a sit-stand workstation. Eco-friendly bamboo surface with dual monitor capacity.",
+      price: 149.99,
+      stock: 3, // Low stock
+      productRating: 4.9,
+      totalReviews: 45,
+      productImage:
+        "https://images.unsplash.com/photo-1518455027359-f3f8164ba6bd?w=800&auto=format&fit=crop&q=80",
+      category: catMap["furniture"],
+      isActive: true,
+    },
+
+    // --- Fashion ---
+    {
+      productName: "Heavyweight Organic Pima Cotton Oversized Tee",
+      sellerName: "Maison Minimal",
+      description:
+        "280 GSM long-staple Peruvian Pima cotton heavyweight T-shirt with drop-shoulder tailoring, ribbed crew neck, and pre-shrunk finish.",
+      price: 38.0,
+      stock: 85,
+      productRating: 4.8,
       totalReviews: 112,
       productImage:
         "https://images.unsplash.com/photo-1521572267360-ee0c2909d518?w=800&auto=format&fit=crop&q=80",
+      images: [
+        "https://images.unsplash.com/photo-1521572267360-ee0c2909d518?w=800&auto=format&fit=crop&q=80",
+        "https://images.unsplash.com/photo-1503342217505-b0a15ec3261c?w=800&auto=format&fit=crop&q=80",
+      ],
       category: catMap["fashion"],
       isActive: true,
     },
     {
-      productName: "Minimalist RFID Carbon Fiber Slim Wallet",
-      sellerName: "Vanguard Gear",
+      productName: "Italian Full-Grain Leather Minimalist Wallet",
+      sellerName: "Atelier Vachetta",
       description:
-        "Ultra-lightweight aerospace matte carbon fiber cardholder with integrated cash clip, thumb notch for rapid card access, and military-grade RFID protection.",
-      price: 45.0,
-      stock: 90,
-      productRating: 4.8,
+        "Vegetable-tanned Tuscan leather bifold card holder with RFID-blocking shielding, hand-burnished edges, and 8 card slots.",
+      price: 59.0,
+      stock: 60,
+      productRating: 4.9,
       totalReviews: 88,
       productImage:
         "https://images.unsplash.com/photo-1627123424574-724758594e93?w=800&auto=format&fit=crop&q=80",
@@ -180,23 +256,51 @@ export const seedDatabase = async () => {
       isActive: true,
     },
     {
-      productName: "Polarized Aviator Classic Sunglasses",
-      sellerName: "Solstice Eyewear",
+      productName: "Selvedge Raw Denim Straight-Leg Jeans",
+      sellerName: "Maison Minimal",
       description:
-        "Lightweight titanium frame aviators with scratch-resistant polarized UV400 lenses, adjustable silicone nose pads, and microfibre protective pouch.",
-      price: 79.0,
-      stock: 60,
+        "13.5 oz Japanese Kurabo mill raw selvedge denim. Button-fly closure with custom antique copper hardware and chain-stitched hems.",
+      price: 115.0,
+      stock: 24,
       productRating: 4.6,
-      totalReviews: 63,
+      totalReviews: 57,
       productImage:
-        "https://images.unsplash.com/photo-1572635196237-14b3f281503f?w=800&auto=format&fit=crop&q=80",
+        "https://images.unsplash.com/photo-1542272604-780c96856592?w=800&auto=format&fit=crop&q=80",
+      category: catMap["fashion"],
+      isActive: true,
+    },
+    {
+      productName: "Merino Wool Ribbed Knit Beanie",
+      sellerName: "Maison Minimal",
+      description:
+        "100% extrafine Australian Merino wool ribbed cuff beanie. Temperature-regulating, itch-free, and naturally odor resistant.",
+      price: 32.0,
+      stock: 0, // Out of stock
+      productRating: 4.7,
+      totalReviews: 41,
+      productImage:
+        "https://images.unsplash.com/photo-1576871337622-98d48d1cf531?w=800&auto=format&fit=crop&q=80",
+      category: catMap["fashion"],
+      isActive: true,
+    },
+    {
+      productName: "Water-Resistant Commuter City Windbreaker",
+      sellerName: "Maison Minimal",
+      description:
+        "Ultra-lightweight packable storm jacket featuring DWR finish, YKK AquaGuard zippers, vented back yoke, and reflective accents.",
+      price: 88.0,
+      stock: 5, // Low stock
+      productRating: 4.5,
+      totalReviews: 36,
+      productImage:
+        "https://images.unsplash.com/photo-1544441893-675973e31985?w=800&auto=format&fit=crop&q=80",
       category: catMap["fashion"],
       isActive: true,
     },
 
-    // Home & Living
+    // --- Home & Kitchen ---
     {
-      productName: "Artisan Ceramic Pour-Over Coffee Station",
+      productName: "Handcrafted Ceramic Pour-Over Coffee Set",
       sellerName: "Kōhī Craft",
       description:
         "Minimalist matte stoneware coffee dripper with spiral extraction channels, ergonomic heat-resistant carafe, and reusable double-layer stainless mesh filter.",
@@ -206,7 +310,7 @@ export const seedDatabase = async () => {
       totalReviews: 67,
       productImage:
         "https://images.unsplash.com/photo-1517256064527-09c73fc73e38?w=800&auto=format&fit=crop&q=80",
-      category: catMap["home & living"],
+      category: catMap["home & kitchen"],
       isActive: true,
     },
     {
@@ -220,7 +324,7 @@ export const seedDatabase = async () => {
       totalReviews: 41,
       productImage:
         "https://images.unsplash.com/photo-1610701596007-11502861dcfa?w=800&auto=format&fit=crop&q=80",
-      category: catMap["home & living"],
+      category: catMap["home & kitchen"],
       isActive: true,
     },
     {
@@ -234,11 +338,111 @@ export const seedDatabase = async () => {
       totalReviews: 92,
       productImage:
         "https://images.unsplash.com/photo-1608571423902-eed4a5ad8108?w=800&auto=format&fit=crop&q=80",
-      category: catMap["home & living"],
+      category: catMap["home & kitchen"],
+      isActive: true,
+    },
+    {
+      productName: "Japanese Damascus Steel Chef Knife 8\"",
+      sellerName: "Kōhī Craft",
+      description:
+        "67-layer VG-10 high-carbon Damascus steel blade with octagonal pakkawood handle, razor-sharp 15-degree edge, and wooden saya sheath.",
+      price: 85.0,
+      stock: 18,
+      productRating: 4.9,
+      totalReviews: 78,
+      productImage:
+        "https://images.unsplash.com/photo-1593618998160-e34014e67546?w=800&auto=format&fit=crop&q=80",
+      category: catMap["home & kitchen"],
+      isActive: true,
+    },
+    {
+      productName: "Pre-Seasoned Cast Iron Skillet 12\"",
+      sellerName: "Hygge Living",
+      description:
+        "Heavy-duty heirloom cast iron pan triple seasoned with organic flaxseed oil. Superior heat retention with dual pour spouts.",
+      price: 39.95,
+      stock: 2, // Low stock
+      productRating: 4.8,
+      totalReviews: 104,
+      productImage:
+        "https://images.unsplash.com/photo-1584990347449-3972a9b2b52a?w=800&auto=format&fit=crop&q=80",
+      category: catMap["home & kitchen"],
       isActive: true,
     },
 
-    // Sports & Outdoors
+    // --- Beauty ---
+    {
+      productName: "Organic Botanical Vitamin C Facial Serum",
+      sellerName: "Lumière Botanicals",
+      description:
+        "Potent antioxidant blend of cold-pressed rosehip seed oil, kakadu plum vitamin C, and plant-derived hyaluronic acid for radiant and hydrated skin.",
+      price: 48.0,
+      stock: 70,
+      productRating: 4.9,
+      totalReviews: 106,
+      productImage:
+        "https://images.unsplash.com/photo-1620916566398-39f1143ab7be?w=800&auto=format&fit=crop&q=80",
+      category: catMap["beauty"],
+      isActive: true,
+    },
+    {
+      productName: "Rejuvenating Jade Facial Roller & Gua Sha Set",
+      sellerName: "Zenith Home",
+      description:
+        "Handcrafted 100% natural Xiuyan jade crystal tool kit designed to promote lymphatic drainage, facial muscle relaxation, and serum absorption.",
+      price: 24.5,
+      stock: 80,
+      productRating: 4.7,
+      totalReviews: 61,
+      productImage:
+        "https://images.unsplash.com/photo-1512290900672-1f55a1098616?w=800&auto=format&fit=crop&q=80",
+      category: catMap["beauty"],
+      isActive: true,
+    },
+    {
+      productName: "Hydrating Peptide Complex Daily Moisturizer",
+      sellerName: "Lumière Botanicals",
+      description:
+        "Lightweight gel-cream infused with 5 multi-weight peptides, ceramides, and centella asiatica to strengthen skin moisture barrier.",
+      price: 34.0,
+      stock: 0, // Out of stock
+      productRating: 4.8,
+      totalReviews: 53,
+      productImage:
+        "https://images.unsplash.com/photo-1570194065650-d99fb4bedf0a?w=800&auto=format&fit=crop&q=80",
+      category: catMap["beauty"],
+      isActive: true,
+    },
+    {
+      productName: "Mineral Broad-Spectrum SPF 50 Sunscreen",
+      sellerName: "Lumière Botanicals",
+      description:
+        "Non-nano zinc oxide reef-safe sun cream. Invisible matte finish without white cast, enriched with soothing green tea extract.",
+      price: 28.0,
+      stock: 4, // Low stock
+      productRating: 4.6,
+      totalReviews: 89,
+      productImage:
+        "https://images.unsplash.com/photo-1556228720-195a672e8a03?w=800&auto=format&fit=crop&q=80",
+      category: catMap["beauty"],
+      isActive: true,
+    },
+    {
+      productName: "Lavender & Sea Salt Exfoliating Body Scrub",
+      sellerName: "Zenith Home",
+      description:
+        "Gentle whipped body polish blending Pacific sea salt with sweet almond oil and Bulgarian lavender essential oil.",
+      price: 22.0,
+      stock: 52,
+      productRating: 4.7,
+      totalReviews: 44,
+      productImage:
+        "https://images.unsplash.com/photo-1556228722-d0b3d103ca91?w=800&auto=format&fit=crop&q=80",
+      category: catMap["beauty"],
+      isActive: true,
+    },
+
+    // --- Sports ---
     {
       productName: "Thermal Insulated Stainless Water Bottle 1L",
       sellerName: "Summit Outdoors",
@@ -250,48 +454,148 @@ export const seedDatabase = async () => {
       totalReviews: 180,
       productImage:
         "https://images.unsplash.com/photo-1602143407151-7111542de6e8?w=800&auto=format&fit=crop&q=80",
-      category: catMap["sports & outdoors"],
+      category: catMap["sports"],
       isActive: true,
     },
     {
-      productName: "High-Density Eco Yoga & Fitness Mat 6mm",
-      sellerName: "Prana Essentials",
+      productName: "High-Density Eco TPE Alignment Yoga Mat",
+      sellerName: "Zenith Home",
       description:
-        "Non-slip alignment patterned eco-TPE exercise mat with anti-tear mesh core, joint-cushioning density, and lightweight carrying sling included.",
-      price: 42.5,
-      stock: 65,
-      productRating: 4.8,
-      totalReviews: 54,
+        "6mm thick non-slip textured exercise mat with laser-engraved body alignment markers, carrying strap, and biodegradable closed-cell construction.",
+      price: 42.0,
+      stock: 35,
+      productRating: 4.7,
+      totalReviews: 73,
       productImage:
-        "https://images.unsplash.com/photo-1592432678016-e910b452f9a2?w=800&auto=format&fit=crop&q=80",
-      category: catMap["sports & outdoors"],
+        "https://images.unsplash.com/photo-1601925260368-ae2f83cf8b7f?w=800&auto=format&fit=crop&q=80",
+      category: catMap["sports"],
       isActive: true,
     },
     {
-      productName: "Pro Speed Carbon Bearing Jump Rope",
+      productName: "Cast Iron Hex Dumbbell Pair 20LB",
       sellerName: "Summit Outdoors",
       description:
-        "Aircraft-grade aluminum knurled handles with 360-degree dual ball bearings and kink-free polymer-coated steel cable for maximum rotation speed.",
-      price: 19.99,
+        "Heavy-duty rubber-encased hex dumbbells with knurled ergonomic chrome handles. Anti-roll design protects workout floors.",
+      price: 58.0,
+      stock: 0, // Out of stock
+      productRating: 4.8,
+      totalReviews: 39,
+      productImage:
+        "https://images.unsplash.com/photo-1583454110551-21f2fa2afe61?w=800&auto=format&fit=crop&q=80",
+      category: catMap["sports"],
+      isActive: true,
+    },
+    {
+      productName: "Resistance Exercise Loop Band Set of 5",
+      sellerName: "Summit Outdoors",
+      description:
+        "100% natural Malaysian latex strength loops ranging from X-Light (5lb) to X-Heavy (40lb). Includes breathable mesh storage pouch.",
+      price: 18.99,
       stock: 95,
       productRating: 4.6,
-      totalReviews: 38,
+      totalReviews: 115,
       productImage:
-        "https://images.unsplash.com/photo-1517838277536-f5f99be501cd?w=800&auto=format&fit=crop&q=80",
-      category: catMap["sports & outdoors"],
+        "https://images.unsplash.com/photo-1598289431512-b97b0917affc?w=800&auto=format&fit=crop&q=80",
+      category: catMap["sports"],
+      isActive: true,
+    },
+    {
+      productName: "Quick-Dry Microfiber Compact Gym Towel",
+      sellerName: "Summit Outdoors",
+      description:
+        "Super-absorbent, ultra-lightweight antimicrobial microfiber fitness towel with zip key pocket and hanging loop.",
+      price: 14.5,
+      stock: 5, // Low stock
+      productRating: 4.5,
+      totalReviews: 62,
+      productImage:
+        "https://images.unsplash.com/photo-1584824486509-112e4181ff6b?w=800&auto=format&fit=crop&q=80",
+      category: catMap["sports"],
       isActive: true,
     },
 
-    // Books & Stationery
+    // --- Accessories ---
     {
-      productName: "Archival Hardcover Dotted Journal Notebook",
-      sellerName: "PaperCraft Studio",
+      productName: "Polarized Acetate Classic Sunglasses",
+      sellerName: "Atelier Vachetta",
       description:
-        "160 numbered pages of bleed-proof 120gsm ivory paper, expanding rear document pocket, dual satin ribbons, and lay-flat Smyth-sewn binding.",
-      price: 21.0,
-      stock: 85,
+        "Handcrafted Italian Mazzucchelli acetate frames with Category 3 polarized UV400 lenses and reinforced 5-barrel barrel hinges.",
+      price: 79.0,
+      stock: 44,
+      productRating: 4.8,
+      totalReviews: 77,
+      productImage:
+        "https://images.unsplash.com/photo-1511499767150-a48a237f0083?w=800&auto=format&fit=crop&q=80",
+      category: catMap["accessories"],
+      isActive: true,
+    },
+    {
+      productName: "Water-Repellent Ballistic Nylon Laptop Sleeve 14\"",
+      sellerName: "Atelier Vachetta",
+      description:
+        "Padded 1680D Cordura ballistic nylon protective case with magnetic closure, fleece lining, and quick-stash charging cable pocket.",
+      price: 36.0,
+      stock: 38,
+      productRating: 4.7,
+      totalReviews: 49,
+      productImage:
+        "https://images.unsplash.com/photo-1544816155-12df9643f363?w=800&auto=format&fit=crop&q=80",
+      category: catMap["accessories"],
+      isActive: true,
+    },
+    {
+      productName: "Aerospace Titanium Minimalist Carabiner Keychain",
+      sellerName: "Modern Scribe",
+      description:
+        "CNC-milled Grade 5 titanium spring gate carabiner with integrated bottle opener, pry bar, and stainless key split rings.",
+      price: 24.0,
+      stock: 3, // Low stock
       productRating: 4.9,
-      totalReviews: 89,
+      totalReviews: 82,
+      productImage:
+        "https://images.unsplash.com/photo-1528795259021-d8c86e14354c?w=800&auto=format&fit=crop&q=80",
+      category: catMap["accessories"],
+      isActive: true,
+    },
+    {
+      productName: "Braided Leather Wrap Bracelet",
+      sellerName: "Atelier Vachetta",
+      description:
+        "Double-wrap genuine calfskin leather wristband with brushed matte black surgical steel magnetic clasp.",
+      price: 28.5,
+      stock: 0, // Out of stock
+      productRating: 4.4,
+      totalReviews: 26,
+      productImage:
+        "https://images.unsplash.com/photo-1611591475825-985289f81d11?w=800&auto=format&fit=crop&q=80",
+      category: catMap["accessories"],
+      isActive: true,
+    },
+    {
+      productName: "Genuine Suede Travel Watch Roll",
+      sellerName: "Atelier Vachetta",
+      description:
+        "Cushioned 3-slot watch storage case in supple midnight navy suede with snap closure and removable pillows.",
+      price: 45.0,
+      stock: 26,
+      productRating: 4.8,
+      totalReviews: 31,
+      productImage:
+        "https://images.unsplash.com/photo-1522335789203-aabd1fc54bc9?w=800&auto=format&fit=crop&q=80",
+      category: catMap["accessories"],
+      isActive: true,
+    },
+
+    // --- Books & Stationery ---
+    {
+      productName: "Vintage Hardcover Dotted Grid Journal 160gsm",
+      sellerName: "Modern Scribe",
+      description:
+        "Bleed-resistant 160 GSM bamboo paper notebook with Smyth-sewn lay-flat binding, dual silk ribbon bookmarks, and expandable rear pocket.",
+      price: 22.5,
+      stock: 65,
+      productRating: 4.9,
+      totalReviews: 83,
       productImage:
         "https://images.unsplash.com/photo-1544716278-ca5e3f4abd8c?w=800&auto=format&fit=crop&q=80",
       category: catMap["books & stationery"],
@@ -311,34 +615,18 @@ export const seedDatabase = async () => {
       category: catMap["books & stationery"],
       isActive: true,
     },
-
-    // Beauty & Wellness
     {
-      productName: "Organic Botanical Vitamin C Facial Serum",
-      sellerName: "Lumière Botanicals",
+      productName: "Wooden Desktop Document & Book Organizer",
+      sellerName: "Modern Scribe",
       description:
-        "Potent antioxidant blend of cold-pressed rosehip seed oil, kakadu plum vitamin C, and plant-derived hyaluronic acid for radiant and hydrated skin.",
-      price: 48.0,
-      stock: 70,
-      productRating: 4.9,
-      totalReviews: 106,
+        "Handcrafted walnut wood desktop tier tray for letters, journals, and tablets with non-slip cork feet.",
+      price: 39.0,
+      stock: 20,
+      productRating: 4.6,
+      totalReviews: 28,
       productImage:
-        "https://images.unsplash.com/photo-1620916566398-39f1143ab7be?w=800&auto=format&fit=crop&q=80",
-      category: catMap["beauty & wellness"],
-      isActive: true,
-    },
-    {
-      productName: "Rejuvenating Jade Facial Roller & Gua Sha Set",
-      sellerName: "Zenith Home",
-      description:
-        "Handcrafted 100% natural Xiuyan jade crystal tool kit designed to promote lymphatic drainage, facial muscle relaxation, and serum absorption.",
-      price: 24.5,
-      stock: 80,
-      productRating: 4.7,
-      totalReviews: 61,
-      productImage:
-        "https://images.unsplash.com/photo-1512290900672-1f55a1098616?w=800&auto=format&fit=crop&q=80",
-      category: catMap["beauty & wellness"],
+        "https://images.unsplash.com/photo-1516962215378-7fa2e137ae93?w=800&auto=format&fit=crop&q=80",
+      category: catMap["books & stationery"],
       isActive: true,
     },
   ];
@@ -346,7 +634,7 @@ export const seedDatabase = async () => {
   const productDocs = await Product.create(productsData);
   console.log(`🛍️ Seeded ${productDocs.length} products.`);
 
-  // 4. Seed Users
+  // 4. Seed Development Users
   // Customer User
   const customerUser = await User.create({
     username: "alex_rivera",
@@ -381,7 +669,7 @@ export const seedDatabase = async () => {
     isActive: true,
   });
 
-  console.log(`👤 Seeded 3 users (customer, admin, demo).`);
+  console.log(`👤 Seeded 3 dev users (customer, admin, demo).`);
 
   // 5. Seed Addresses for Customer
   const primaryAddress = await Address.create({
@@ -413,10 +701,10 @@ export const seedDatabase = async () => {
   // 6. Seed Orders for Customer
   const headphoneProduct = productDocs[0];
   const watchProduct = productDocs[1];
-  const teeProduct = productDocs[5];
+  const teeProduct = productDocs[10]; // Pima cotton tee
 
   // Order 1: Delivered
-  await Order.create({
+  const order1 = await Order.create({
     orderNumber: "SHP-2026-0001",
     customer: customerUser._id,
     orderItems: [
@@ -471,7 +759,7 @@ export const seedDatabase = async () => {
   });
 
   // Order 2: In transit
-  await Order.create({
+  const order2 = await Order.create({
     orderNumber: "SHP-2026-0002",
     customer: customerUser._id,
     orderItems: [
@@ -512,12 +800,12 @@ export const seedDatabase = async () => {
 
   console.log(`📦 Seeded 2 sample orders.`);
 
-  // 7. Seed Reviews
+  // 7. Seed Reviews (Valid verified reviews linked to valid products, users & orders)
   await Review.create([
     {
       user: customerUser._id,
       product: headphoneProduct._id,
-      order: new mongoose.Types.ObjectId(),
+      order: order1._id,
       rating: 5,
       title: "Phenomenal audio & battery life",
       comment:
@@ -528,7 +816,7 @@ export const seedDatabase = async () => {
     {
       user: customerUser._id,
       product: teeProduct._id,
-      order: new mongoose.Types.ObjectId(),
+      order: order1._id,
       rating: 5,
       title: "Best everyday tee I own",
       comment:
@@ -536,9 +824,42 @@ export const seedDatabase = async () => {
       status: "PUBLISHED",
       verifiedPurchase: true,
     },
+    {
+      user: demoUser._id,
+      product: watchProduct._id,
+      order: order2._id,
+      rating: 5,
+      title: "Incredible fitness companion",
+      comment:
+        "Battery life easily reaches 7 full days with continuous tracking. The sapphire glass is ultra tough and GPS locking is instantaneous.",
+      status: "PUBLISHED",
+      verifiedPurchase: true,
+    },
+    {
+      user: customerUser._id,
+      product: productDocs[2]._id, // Lumix Speaker
+      order: order1._id,
+      rating: 4,
+      title: "Great sound for outdoor trips",
+      comment:
+        "Remarkably loud for its portable size! Waterproof build came in handy during beach trips. Very satisfied.",
+      status: "PUBLISHED",
+      verifiedPurchase: true,
+    },
+    {
+      user: demoUser._id,
+      product: productDocs[15]._id, // Handcrafted Ceramic Pour-Over
+      order: order1._id,
+      rating: 5,
+      title: "Elevated my morning brew routine",
+      comment:
+        "The ceramic retains temperature perfectly during extraction. It is as much an art piece on the counter as it is functional.",
+      status: "PUBLISHED",
+      verifiedPurchase: true,
+    },
   ]);
 
-  console.log(`⭐ Seeded verified reviews.`);
+  console.log(`⭐ Seeded 5 verified reviews.`);
 
   // 8. Seed Notifications
   await Notification.create([
@@ -575,13 +896,13 @@ export const seedDatabase = async () => {
     user: customerUser._id,
     items: [
       { product: productDocs[2]._id, quantity: 1 },
-      { product: productDocs[6]._id, quantity: 1 },
+      { product: productDocs[11]._id, quantity: 1 },
     ],
   });
 
   await Wishlist.create({
     user: customerUser._id,
-    products: [productDocs[3]._id, productDocs[7]._id, productDocs[11]._id],
+    products: [productDocs[0]._id, productDocs[5]._id, productDocs[15]._id],
   });
 
   console.log(`🛒 Seeded active cart and wishlist for customer.`);
@@ -592,7 +913,7 @@ export const seedDatabase = async () => {
     users: 3,
     addresses: 2,
     orders: 2,
-    reviews: 2,
+    reviews: 5,
     notifications: 3,
   };
 };

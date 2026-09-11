@@ -119,6 +119,12 @@ export const registerUser = asyncHandler(async (req, res) => {
       email: user.email,
       role: user.role,
       avatar: user.avatar,
+      phone: user.phone || "",
+      notificationPreferences: user.notificationPreferences || {
+        orderUpdates: true,
+        promotions: true,
+        wishlistAlerts: true,
+      },
     };
 
     return res
@@ -172,6 +178,12 @@ export const registerUser = asyncHandler(async (req, res) => {
     email: offlineUser.email,
     role: offlineUser.role,
     avatar: offlineUser.avatar,
+    phone: offlineUser.phone || "",
+    notificationPreferences: offlineUser.notificationPreferences || {
+      orderUpdates: true,
+      promotions: true,
+      wishlistAlerts: true,
+    },
   };
 
   return res
@@ -235,6 +247,12 @@ export const loginUser = asyncHandler(async (req, res) => {
       email: user.email,
       role: user.role,
       avatar: user.avatar,
+      phone: user.phone || "",
+      notificationPreferences: user.notificationPreferences || {
+        orderUpdates: true,
+        promotions: true,
+        wishlistAlerts: true,
+      },
     };
 
     return res
@@ -278,6 +296,12 @@ export const loginUser = asyncHandler(async (req, res) => {
     email: offlineUser.email,
     role: offlineUser.role,
     avatar: offlineUser.avatar,
+    phone: offlineUser.phone || "",
+    notificationPreferences: offlineUser.notificationPreferences || {
+      orderUpdates: true,
+      promotions: true,
+      wishlistAlerts: true,
+    },
   };
 
   return res
