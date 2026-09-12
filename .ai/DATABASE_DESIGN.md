@@ -151,10 +151,33 @@ Shoppy uses MongoDB 7.0 (local Docker container `shoppy-mongodb` on port `27017`
 - Per-user single documents storing items with product reference, quantity, and added timestamp.
 - Cart stores optional `couponCode` (String) referencing applied promotion. Summary calculation dynamically computes `discount`, `taxableAmount`, and `appliedCoupon` object snapshot without persisting ephemeral financial calculations.
 
+### Campaigns (`campaigns`)
+- `_id`: ObjectId
+- `title`: String (Required, Trimmed)
+- `subtitle`: String (Optional, Trimmed)
+- `description`: String (Optional, Trimmed)
+- `bannerImage`: String (Required URL)
+- `mobileImage`: String (Optional responsive URL)
+- `desktopImage`: String (Optional responsive URL)
+- `campaignType`: Enum `['SALE', 'FESTIVAL', 'CATEGORY', 'PRODUCT', 'NEW_ARRIVAL', 'BANK_OFFER', 'SEASONAL', 'GENERAL']`
+- `startAt`: Date (Default: Date.now, Indexed)
+- `endAt`: Date (Required, must be strictly greater than startAt, Indexed)
+- `isActive`: Boolean (Default: true, Indexed)
+- `priority`: Number (Default: 0, High priority renders first, Indexed)
+- `displayOrder`: Number (Default: 0, Secondary sort ascending, Indexed)
+- `targetType`: Enum `['HOME', 'CATEGORY', 'PRODUCT', 'SEARCH', 'COUPON', 'COLLECTION']`
+- `targetId`: String (Target identifier or slug)
+- `ctaLabel`: String (Default: `'Shop Now'`)
+- `ctaAction`: Object `{ type, value }`
+- `couponCode`: String (Optional coupon code reference for promotional campaign integration)
+- `metadata`: Object (Styling tags, background gradient keys, accent colors)
+- `createdAt`, `updatedAt`: Timestamps
+- Compound Index: `{ isActive: 1, startAt: 1, endAt: 1, priority: -1, displayOrder: 1 }`
+
 ## 3. Seeding Specification (`unified.seed.js`)
 Executed via `npm run seed`:
-- **Categories (6)**: Electronics, Fashion & Apparel, Home & Kitchen, Audio & Acoustics, Computing & Tech, Accessories.
-- **Products (38)**: Comprehensive high-resolution catalog across all 6 categories, configured with realistic Indian INR pricing, MRPs, HSN codes (e.g. 8518, 6109, 8471), and GST tax rates across 0%, 5%, 12%, 18%, and 28% slabs.
+- **Categories (8)**: Electronics, Furniture, Fashion, Home & Kitchen, Beauty, Sports, Accessories, Books & Stationery.
+- **Products (38)**: Comprehensive high-resolution catalog across all categories, configured with realistic Indian INR pricing, MRPs, HSN codes (e.g. 8518, 6109, 8471), and GST tax rates across 0%, 5%, 12%, 18%, and 28% slabs.
 - **Users (3)**:
   - Customer: `customer@shoppy.com` / `Customer@12345` (ID: predefined for tests/demo)
   - Administrator: `admin@shoppy.com` / `Admin@12345`
@@ -167,6 +190,13 @@ Executed via `npm run seed`:
   - `SUMMER15`: 15% summer discount (Max ₹750, Min ₹1,499)
   - `EXPIRED10`: Past expiry date test coupon
   - `INACTIVE50`: Inactive test coupon
+- **Campaigns (6)**:
+  - `Diwali Dhamaka Sale — Up to 50% Off`: FESTIVAL, Active, Priority 10, references FESTIVE20 coupon, targets category electronics.
+  - `Next-Gen Sound & Audio Labs`: NEW_ARRIVAL, Active, Priority 8, targets category electronics.
+  - `Modern Living & Artisan Home`: SALE, Active, Priority 5, references FLAT500 coupon.
+  - `Monsoon Clearance Blowout`: SEASONAL, Expired validity testing.
+  - `Republic Day Mega Sale Preview`: FESTIVAL, Future scheduled testing.
+  - `Deactivated General Banner`: GENERAL, Inactive toggle testing.
 - **Orders (2)**: 1 DELIVERED order with item snapshots, GST breakdown, & tracking; 1 CONFIRMED order.
-- **Reviews (2)**: Verified customer reviews with 5-star ratings.
+- **Reviews (5)**: Verified customer reviews with star ratings.
 - **Notifications (3)**: Welcome, Order Shipped, and Seasonal Discount notifications.

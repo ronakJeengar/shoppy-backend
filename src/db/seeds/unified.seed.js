@@ -11,6 +11,7 @@ import { Notification } from "../../models/notification.model.js";
 import { Cart } from "../../models/cart.model.js";
 import { Wishlist } from "../../models/wishlist.model.js";
 import { Coupon } from "../../models/coupon.model.js";
+import { Campaign } from "../../models/campaign.model.js";
 import { calculateOrderTax } from "../../services/tax.service.js";
 
 dotenv.config();
@@ -35,6 +36,7 @@ export const seedDatabase = async () => {
     Cart.deleteMany({}),
     Wishlist.deleteMany({}),
     Coupon.deleteMany({}),
+    Campaign.deleteMany({}),
   ]);
 
   console.log("🧹 Cleared all collections.");
@@ -1253,6 +1255,168 @@ export const seedDatabase = async () => {
 
   console.log(`🎟️ Seeded ${couponDocs.length} coupons.`);
 
+  // 11. Seed Campaigns / Sale Banners (Feature 3)
+  const campaignDocs = await Campaign.create([
+    {
+      title: "Diwali Dhamaka Sale — Up to 50% Off",
+      subtitle: "Celebrate festive joy with mega savings on top electronics and fashion",
+      description: "Exclusive festive discounts, instant bank offers, and limited-time coupons on premium brands.",
+      bannerImage: "https://images.unsplash.com/photo-1512436991641-6745cdb1723f?w=1200&auto=format&fit=crop&q=80",
+      mobileImage: "https://images.unsplash.com/photo-1512436991641-6745cdb1723f?w=600&auto=format&fit=crop&q=80",
+      desktopImage: "https://images.unsplash.com/photo-1512436991641-6745cdb1723f?w=1200&auto=format&fit=crop&q=80",
+      campaignType: "FESTIVAL",
+      startAt: new Date(now.getTime() - 2 * 24 * 60 * 60 * 1000),
+      endAt: nextMonth,
+      isActive: true,
+      priority: 10,
+      displayOrder: 1,
+      targetType: "CATEGORY",
+      targetId: "electronics",
+      ctaLabel: "Shop Festive Sale",
+      ctaAction: {
+        type: "CATEGORY",
+        value: "electronics",
+      },
+      couponCode: "FESTIVE20",
+      metadata: {
+        tag: "FESTIVAL SPECIAL",
+        bgGradient: "amber",
+        accentColor: "#F59E0B",
+      },
+    },
+    {
+      title: "Next-Gen Sound & Audio Labs",
+      subtitle: "Explore noise-cancelling headphones, soundbars & studio gear",
+      description: "State-of-the-art acoustics and high-fidelity audio equipment with official brand warranties.",
+      bannerImage: "https://images.unsplash.com/photo-1505740420928-5e560c06d30e?w=1200&auto=format&fit=crop&q=80",
+      mobileImage: "https://images.unsplash.com/photo-1505740420928-5e560c06d30e?w=600&auto=format&fit=crop&q=80",
+      desktopImage: "https://images.unsplash.com/photo-1505740420928-5e560c06d30e?w=1200&auto=format&fit=crop&q=80",
+      campaignType: "NEW_ARRIVAL",
+      startAt: new Date(now.getTime() - 5 * 24 * 60 * 60 * 1000),
+      endAt: nextMonth,
+      isActive: true,
+      priority: 8,
+      displayOrder: 2,
+      targetType: "CATEGORY",
+      targetId: "electronics",
+      ctaLabel: "Explore Audio",
+      ctaAction: {
+        type: "CATEGORY",
+        value: "electronics",
+      },
+      couponCode: null,
+      metadata: {
+        tag: "NEW ARRIVALS",
+        bgGradient: "indigo",
+        accentColor: "#4F46E5",
+      },
+    },
+    {
+      title: "Modern Living & Artisan Home",
+      subtitle: "Elevate your space with handcrafted cookware & designer accents",
+      description: "Curated collection of modern kitchenware, ergonomic dining pieces, and artisan ceramics.",
+      bannerImage: "https://images.unsplash.com/photo-1556911220-e15b29be8c8f?w=1200&auto=format&fit=crop&q=80",
+      mobileImage: "https://images.unsplash.com/photo-1556911220-e15b29be8c8f?w=600&auto=format&fit=crop&q=80",
+      desktopImage: "https://images.unsplash.com/photo-1556911220-e15b29be8c8f?w=1200&auto=format&fit=crop&q=80",
+      campaignType: "SALE",
+      startAt: new Date(now.getTime() - 1 * 24 * 60 * 60 * 1000),
+      endAt: nextMonth,
+      isActive: true,
+      priority: 5,
+      displayOrder: 3,
+      targetType: "COUPON",
+      targetId: "FLAT500",
+      ctaLabel: "Use FLAT500",
+      ctaAction: {
+        type: "COUPON",
+        value: "FLAT500",
+      },
+      couponCode: "FLAT500",
+      metadata: {
+        tag: "LIMITED OFFER",
+        bgGradient: "slate",
+        accentColor: "#0F172A",
+      },
+    },
+    {
+      title: "Monsoon Clearance Blowout",
+      subtitle: "Past promotional offer archive",
+      description: "Expired promotional sale testing schedule validity.",
+      bannerImage: "https://images.unsplash.com/photo-1441986300917-64674bd600d8?w=1200&auto=format&fit=crop&q=80",
+      mobileImage: "https://images.unsplash.com/photo-1441986300917-64674bd600d8?w=600&auto=format&fit=crop&q=80",
+      desktopImage: "https://images.unsplash.com/photo-1441986300917-64674bd600d8?w=1200&auto=format&fit=crop&q=80",
+      campaignType: "SEASONAL",
+      startAt: new Date(now.getTime() - 60 * 24 * 60 * 60 * 1000),
+      endAt: lastMonth,
+      isActive: true,
+      priority: 1,
+      displayOrder: 4,
+      targetType: "CATEGORY",
+      targetId: "fashion",
+      ctaLabel: "View Clearance",
+      ctaAction: {
+        type: "CATEGORY",
+        value: "fashion",
+      },
+      couponCode: null,
+      metadata: {
+        tag: "EXPIRED",
+        bgGradient: "slate",
+      },
+    },
+    {
+      title: "Republic Day Mega Sale Preview",
+      subtitle: "Great Indian patriotic sale preview",
+      description: "Future scheduled campaign testing upcoming scheduling.",
+      bannerImage: "https://images.unsplash.com/photo-1472851294608-062f824d29cc?w=1200&auto=format&fit=crop&q=80",
+      mobileImage: "https://images.unsplash.com/photo-1472851294608-062f824d29cc?w=600&auto=format&fit=crop&q=80",
+      desktopImage: "https://images.unsplash.com/photo-1472851294608-062f824d29cc?w=1200&auto=format&fit=crop&q=80",
+      campaignType: "FESTIVAL",
+      startAt: new Date(now.getTime() + 10 * 24 * 60 * 60 * 1000),
+      endAt: nextYear,
+      isActive: true,
+      priority: 15,
+      displayOrder: 1,
+      targetType: "HOME",
+      targetId: "",
+      ctaLabel: "Notify Me",
+      ctaAction: {
+        type: "HOME",
+        value: "",
+      },
+      couponCode: null,
+      metadata: {
+        tag: "UPCOMING",
+        bgGradient: "amber",
+      },
+    },
+    {
+      title: "Deactivated General Banner",
+      subtitle: "Manually turned off campaign",
+      description: "Test inactive campaign status filtering.",
+      bannerImage: "https://images.unsplash.com/photo-1441986300917-64674bd600d8?w=1200&auto=format&fit=crop&q=80",
+      mobileImage: "https://images.unsplash.com/photo-1441986300917-64674bd600d8?w=600&auto=format&fit=crop&q=80",
+      desktopImage: "https://images.unsplash.com/photo-1441986300917-64674bd600d8?w=1200&auto=format&fit=crop&q=80",
+      campaignType: "GENERAL",
+      startAt: new Date(now.getTime() - 5 * 24 * 60 * 60 * 1000),
+      endAt: nextMonth,
+      isActive: false,
+      priority: 2,
+      displayOrder: 5,
+      targetType: "HOME",
+      targetId: "",
+      ctaLabel: "Learn More",
+      ctaAction: {
+        type: "HOME",
+        value: "",
+      },
+      couponCode: null,
+      metadata: {},
+    },
+  ]);
+
+  console.log(`🎯 Seeded ${campaignDocs.length} campaigns/banners.`);
+
   return {
     categories: categoryDocs.length,
     products: productDocs.length,
@@ -1262,6 +1426,7 @@ export const seedDatabase = async () => {
     reviews: 5,
     notifications: 3,
     coupons: couponDocs.length,
+    campaigns: campaignDocs.length,
   };
 };
 

@@ -545,3 +545,24 @@ Shoppy implements a secure, backend-authoritative Indian coupon and discount eng
 * **Cart Lifecycle & Stale Eviction**:
   - Adding or removing cart items automatically re-evaluates the applied coupon.
   - If cart subtotal drops below `minimumOrderValue`, the backend gracefully drops the stale coupon without throwing unhandled errors, returning recalculated standard totals.
+
+---
+
+## 12. Feature 3: Backend-Driven Sale Banner & Campaign System
+
+Shoppy implements a backend-driven, content-governed campaign and sale banner architecture that separates visual presentation from commercial discount calculation.
+
+### 12.1 Authoritative Backend Campaign Architecture (`src/services/campaign.service.js`)
+* **Content vs Commercial Boundary**:
+  - Banners represent visual campaign content (titles, subtitles, media URLs, tags, background styles, and CTAs).
+  - Referenced coupon codes (e.g. `FESTIVE20`, `FLAT500`) are not treated as proof of discount; validation and discount math remain strictly governed by the backend Coupon Service from Feature 2.
+* **Scheduling & Filtering**:
+  - Evaluated on the server using UTC dates (`startAt <= now <= endAt`) and administrative `isActive` flag.
+  - Expired, future-scheduled, and deactivated campaigns are strictly excluded from public discovery.
+* **Deterministic Display Ordering**:
+  - Campaigns are ordered by `priority DESC` (high priority rendered first), `displayOrder ASC` (secondary sort), and `createdAt DESC`.
+* **Allowlisted Safe Navigation CTAs**:
+  - Target types restricted to an explicit enum: `['HOME', 'CATEGORY', 'PRODUCT', 'SEARCH', 'COUPON', 'COLLECTION']`.
+  - Stored as structured `ctaAction` (`type`, `value`), preventing arbitrary executable links, deep-link injection, or unsafe JavaScript execution.
+* **Role-Based Admin Management**:
+  - Role-guarded endpoints under `/api/v1/admin/campaigns` allow authorized administrators to create, update, activate/deactivate, and delete campaigns with validation (`endAt > startAt`).

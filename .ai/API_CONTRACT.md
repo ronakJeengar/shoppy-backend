@@ -56,3 +56,15 @@ Base URL: `http://localhost:8000/api/v1`
 - `PATCH /admin/coupons/:id` - Update coupon parameters.
 - `PATCH /admin/coupons/:id/status` - Toggle active/inactive status.
 - `DELETE /admin/coupons/:id` - Soft or hard delete coupon.
+
+## 9. Campaigns & Sale Banners (Feature 3)
+- `GET /campaigns/active` - List currently active promotional campaigns and sale banners evaluated authoritatively on the backend (`startAt <= now <= endAt`, `isActive: true`, deterministic order `priority: -1, displayOrder: 1`). Supports `limit` and `type` filters.
+- `GET /campaigns/:id` - Fetch single campaign metadata.
+
+## 10. Admin Campaign Management
+- `GET /admin/campaigns` - Paginated campaign listing filterable by status (`all`, `active`, `inactive`, `expired`, `scheduled`) and `type`. Requires ADMIN role.
+- `POST /admin/campaigns` - Create a new sale campaign with date validation (`endAt > startAt`) and allowlisted CTA action.
+- `GET /admin/campaigns/:id` - Fetch detailed campaign metadata.
+- `PATCH /admin/campaigns/:id` - Update campaign parameters with schema validation.
+- `PATCH /admin/campaigns/:id/status` - Toggle active/inactive status.
+- `DELETE /admin/campaigns/:id` - Delete campaign.

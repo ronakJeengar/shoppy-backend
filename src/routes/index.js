@@ -16,6 +16,7 @@ import aiRouter from "./ai.routes.js";
 import recommendationRouter from "./recommendation.routes.js";
 import mcpRouter from "./mcp.routes.js";
 import couponRouter from "./coupon.routes.js";
+import campaignRouter from "./campaign.routes.js";
 import appRouter from "./app.routes.js";
 import {
   registerUser,
@@ -65,6 +66,7 @@ router.use("/ai", aiRouter);
 router.use("/recommendations", recommendationRouter);
 router.use("/mcp", mcpRouter);
 router.use("/coupons", couponRouter);
+router.use("/campaigns", campaignRouter);
 router.use("/app", appRouter);
 
 // Backwards-compatibility aliases for legacy client endpoints

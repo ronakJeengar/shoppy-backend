@@ -42,6 +42,14 @@ import {
   getAdminAppConfig,
   updateAdminAppConfig,
 } from "../controllers/app_config.controller.js";
+import {
+  getAdminCampaigns,
+  createAdminCampaign,
+  getAdminCampaignById,
+  updateAdminCampaign,
+  toggleAdminCampaignStatus,
+  deleteAdminCampaign,
+} from "../controllers/campaign.controller.js";
 
 
 const router = Router();
@@ -103,6 +111,14 @@ router.get("/coupons/:id", getAdminCouponById);
 router.patch("/coupons/:id", updateAdminCoupon);
 router.patch("/coupons/:id/status", toggleAdminCouponStatus);
 router.delete("/coupons/:id", deleteAdminCoupon);
+
+// 11. Campaign & Sale Banner Management
+router.get("/campaigns", getAdminCampaigns);
+router.post("/campaigns", createAdminCampaign);
+router.get("/campaigns/:id", getAdminCampaignById);
+router.patch("/campaigns/:id", updateAdminCampaign);
+router.patch("/campaigns/:id/status", toggleAdminCampaignStatus);
+router.delete("/campaigns/:id", deleteAdminCampaign);
 
 export default router;
 
