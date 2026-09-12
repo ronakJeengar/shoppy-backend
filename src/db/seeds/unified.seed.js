@@ -24,11 +24,17 @@ export const seedDatabase = async () => {
 
   console.log("🌱 Starting unified database seeding (Indian GST & INR)...");
 
-  // 1. Clear existing non-user data & seeded dev users
+  const devUserEmails = [
+    "customer@shoppy.com",
+    "admin@shoppy.com",
+    "demo@shoppy.com",
+  ];
+
+  // 1. Clear existing non-user data & seeded dev users (preserve real registered users)
   await Promise.all([
     Category.deleteMany({}),
     Product.deleteMany({}),
-    User.deleteMany({}),
+    User.deleteMany({ email: { $in: devUserEmails } }),
     Address.deleteMany({}),
     Order.deleteMany({}),
     Review.deleteMany({}),

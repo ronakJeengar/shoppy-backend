@@ -213,20 +213,28 @@ export const loginUser = asyncHandler(async (req, res) => {
     ]);
   }
 
+  const credential = (email || username || "").trim().toLowerCase();
   const normalizedEmail = email ? email.trim().toLowerCase() : null;
+  const normalizedUsername = username ? username.trim().toLowerCase() : null;
 
   if (mongoose.connection.readyState === 1) {
-    const queryIdentifier = normalizedEmail
-      ? { email: normalizedEmail }
-      : { username: username.trim().toLowerCase() };
-
-    const user = await User.findOne(queryIdentifier);
+    const user = await User.findOne({
+      $or: [
+        ...(normalizedEmail ? [{ email: normalizedEmail }] : []),
+        ...(normalizedUsername ? [{ username: normalizedUsername }] : []),
+        { email: credential },
+        { username: credential },
+      ],
+    }).select("+password");
 
     if (!user) {
       throw new ApiError(401, "Invalid email or password");
     }
 
-    const isPasswordValid = await user.isPasswordCorrect(password);
+    let isPasswordValid = await user.isPasswordCorrect(password);
+    if (!isPasswordValid && password.trim() !== password) {
+      isPasswordValid = await user.isPasswordCorrect(password.trim());
+    }
 
     if (!isPasswordValid) {
       throw new ApiError(401, "Invalid email or password");
@@ -274,12 +282,32 @@ export const loginUser = asyncHandler(async (req, res) => {
   }
 
   // Offline / fallback mode
-  const offlineUser = normalizedEmail ? inMemoryUsers.get(normalizedEmail) : null;
+  let offlineUser = null;
+  if (normalizedEmail && inMemoryUsers.has(normalizedEmail)) {
+    offlineUser = inMemoryUsers.get(normalizedEmail);
+  } else if (inMemoryUsers.has(credential)) {
+    offlineUser = inMemoryUsers.get(credential);
+  } else {
+    for (const u of inMemoryUsers.values()) {
+      if (
+        u.email?.toLowerCase() === credential ||
+        u.username?.toLowerCase() === credential
+      ) {
+        offlineUser = u;
+        break;
+      }
+    }
+  }
+
   if (!offlineUser) {
     throw new ApiError(401, "Invalid email or password");
   }
 
-  const isPasswordValid = await bcryptjs.compare(password, offlineUser.password);
+  let isPasswordValid = await bcryptjs.compare(password, offlineUser.password);
+  if (!isPasswordValid && password.trim() !== password) {
+    isPasswordValid = await bcryptjs.compare(password.trim(), offlineUser.password);
+  }
+
   if (!isPasswordValid) {
     throw new ApiError(401, "Invalid email or password");
   }

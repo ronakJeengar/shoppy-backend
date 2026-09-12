@@ -139,4 +139,57 @@ describe("Phase 02 Authentication & Identity Tests", () => {
     });
     assert.strictEqual(allowError, undefined, "Customer should be permitted");
   });
+
+  test("Registration and login support case-insensitivity and whitespace resilience", async () => {
+    const server = app.listen(0);
+    const port = server.address().port;
+    const testEmail = `testuser_${Date.now()}@example.com`;
+    const testPassword = "SecretPassword123";
+
+    try {
+      // 1. Register user
+      const regRes = await fetch(`http://localhost:${port}/api/v1/auth/register`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: "Test Persistence User",
+          email: testEmail,
+          password: testPassword,
+        }),
+      });
+      assert.strictEqual(regRes.status, 201);
+      const regData = await regRes.json();
+      assert.strictEqual(regData.success, true);
+      assert.ok(regData.data.accessToken);
+
+      // 2. Login with uppercase email and leading/trailing whitespace
+      const loginRes = await fetch(`http://localhost:${port}/api/v1/auth/login`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          email: `  ${testEmail.toUpperCase()}  `,
+          password: `  ${testPassword}  `,
+        }),
+      });
+      assert.strictEqual(loginRes.status, 200);
+      const loginData = await loginRes.json();
+      assert.strictEqual(loginData.success, true);
+      assert.strictEqual(loginData.data.user.email, testEmail.toLowerCase());
+
+      // 3. Login using username field
+      const loginUserRes = await fetch(`http://localhost:${port}/api/v1/auth/login`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          username: regData.data.user.username,
+          password: testPassword,
+        }),
+      });
+      assert.strictEqual(loginUserRes.status, 200);
+      const loginUserData = await loginUserRes.json();
+      assert.strictEqual(loginUserData.success, true);
+    } finally {
+      server.close();
+    }
+  });
 });
