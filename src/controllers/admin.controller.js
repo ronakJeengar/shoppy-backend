@@ -5,11 +5,13 @@ import { Category } from "../models/category.model.js";
 import { Order } from "../models/order.model.js";
 import { Payment } from "../models/payment.model.js";
 import { AuditLog } from "../models/audit_log.model.js";
+import { Coupon } from "../models/coupon.model.js";
 import { ApiError } from "../utils/apiError.js";
 import { ApiResponse } from "../utils/apiResponse.js";
 import { asyncHandler } from "../utils/asyncHandler.js";
 import { logAdminAction, memoryAuditLogs } from "../utils/auditLogger.js";
 import { createTransactionalNotification } from "../utils/notificationService.js";
+import { normalizeCouponCode } from "../services/coupon.service.js";
 
 // Valid order lifecycle state transitions
 const VALID_TRANSITIONS = {
@@ -27,6 +29,7 @@ export const memoryAdminStore = {
   categories: [],
   orders: [],
   users: [],
+  coupons: [],
 };
 
 export const _resetMemoryAdminStore = () => {
@@ -34,6 +37,7 @@ export const _resetMemoryAdminStore = () => {
   memoryAdminStore.categories = [];
   memoryAdminStore.orders = [];
   memoryAdminStore.users = [];
+  memoryAdminStore.coupons = [];
   memoryAuditLogs.length = 0;
 };
 
@@ -1587,5 +1591,353 @@ export const getAdminAuditLogs = asyncHandler(async (req, res) => {
         "Audit logs retrieved successfully"
       )
     );
+  }
+});
+
+// ==========================================
+// 8. COUPON & PROMOTION MANAGEMENT
+// ==========================================
+
+export const getAdminCoupons = asyncHandler(async (req, res) => {
+  const { page = 1, limit = 20, q, status } = req.query;
+  const pageNum = Math.max(1, parseInt(page, 10));
+  const limitNum = Math.max(1, Math.min(100, parseInt(limit, 10)));
+  const skip = (pageNum - 1) * limitNum;
+
+  if (mongoose.connection.readyState === 1) {
+    const filter = {};
+    if (q && q.trim()) {
+      filter.$or = [
+        { code: { $regex: q.trim(), $options: "i" } },
+        { name: { $regex: q.trim(), $options: "i" } },
+      ];
+    }
+    if (status === "active") {
+      filter.isActive = true;
+      filter.expiresAt = { $gte: new Date() };
+    } else if (status === "inactive") {
+      filter.isActive = false;
+    } else if (status === "expired") {
+      filter.expiresAt = { $lt: new Date() };
+    }
+
+    const [coupons, total] = await Promise.all([
+      Coupon.find(filter)
+        .sort({ createdAt: -1 })
+        .skip(skip)
+        .limit(limitNum)
+        .lean(),
+      Coupon.countDocuments(filter),
+    ]);
+
+    const totalPages = Math.ceil(total / limitNum) || 1;
+
+    return res.status(200).json(
+      new ApiResponse(
+        200,
+        {
+          coupons,
+          pagination: {
+            total,
+            page: pageNum,
+            limit: limitNum,
+            totalPages,
+            hasNext: pageNum < totalPages,
+            hasPrev: pageNum > 1,
+          },
+        },
+        "Coupons retrieved successfully"
+      )
+    );
+  } else {
+    let filtered = [...memoryAdminStore.coupons];
+    if (q && q.trim()) {
+      const qLower = q.trim().toLowerCase();
+      filtered = filtered.filter(
+        (c) =>
+          c.code.toLowerCase().includes(qLower) ||
+          c.name.toLowerCase().includes(qLower)
+      );
+    }
+    if (status === "active") {
+      filtered = filtered.filter((c) => c.isActive && new Date(c.expiresAt) >= new Date());
+    } else if (status === "inactive") {
+      filtered = filtered.filter((c) => !c.isActive);
+    } else if (status === "expired") {
+      filtered = filtered.filter((c) => new Date(c.expiresAt) < new Date());
+    }
+
+    const total = filtered.length;
+    const totalPages = Math.ceil(total / limitNum) || 1;
+    const coupons = filtered.slice(skip, skip + limitNum);
+
+    return res.status(200).json(
+      new ApiResponse(
+        200,
+        {
+          coupons,
+          pagination: {
+            total,
+            page: pageNum,
+            limit: limitNum,
+            totalPages,
+            hasNext: pageNum < totalPages,
+            hasPrev: pageNum > 1,
+          },
+        },
+        "Coupons retrieved successfully"
+      )
+    );
+  }
+});
+
+export const createAdminCoupon = asyncHandler(async (req, res) => {
+  const {
+    code,
+    name,
+    description,
+    discountType,
+    discountValue,
+    minimumOrderValue = 0,
+    maximumDiscountAmount = null,
+    startAt,
+    expiresAt,
+    isActive = true,
+    usageLimit = null,
+    perUserLimit = 1,
+    applicableProducts = [],
+    applicableCategories = [],
+    excludedProducts = [],
+    excludedCategories = [],
+    firstOrderOnly = false,
+  } = req.body;
+
+  if (!code || !name || !discountType || discountValue === undefined || !expiresAt) {
+    throw new ApiError(
+      400,
+      "Code, name, discountType, discountValue, and expiresAt are required"
+    );
+  }
+
+  if (!["PERCENTAGE", "FIXED"].includes(discountType)) {
+    throw new ApiError(400, "Discount type must be PERCENTAGE or FIXED");
+  }
+
+  const numVal = Number(discountValue);
+  if (isNaN(numVal) || numVal < 0) {
+    throw new ApiError(400, "Discount value must be a positive number");
+  }
+
+  if (discountType === "PERCENTAGE" && numVal > 100) {
+    throw new ApiError(400, "Percentage discount value cannot exceed 100%");
+  }
+
+  const normalizedCode = normalizeCouponCode(code);
+
+  if (mongoose.connection.readyState === 1) {
+    const existing = await Coupon.findOne({ code: normalizedCode });
+    if (existing) {
+      throw new ApiError(409, `Coupon with code "${normalizedCode}" already exists`);
+    }
+
+    const coupon = await Coupon.create({
+      code: normalizedCode,
+      name: name.trim(),
+      description: description ? description.trim() : "",
+      discountType,
+      discountValue: numVal,
+      minimumOrderValue: Number(minimumOrderValue) || 0,
+      maximumDiscountAmount: maximumDiscountAmount !== null && maximumDiscountAmount !== undefined ? Number(maximumDiscountAmount) : null,
+      startAt: startAt ? new Date(startAt) : new Date(),
+      expiresAt: new Date(expiresAt),
+      isActive: Boolean(isActive),
+      usageLimit: usageLimit !== null && usageLimit !== undefined ? Number(usageLimit) : null,
+      perUserLimit: Number(perUserLimit) || 1,
+      applicableProducts,
+      applicableCategories,
+      excludedProducts,
+      excludedCategories,
+      firstOrderOnly: Boolean(firstOrderOnly),
+    });
+
+    await logAdminAction(
+      req.user._id,
+      "COUPON_CREATED",
+      "COUPON",
+      coupon._id,
+      { code: normalizedCode, discountType, discountValue: numVal }
+    );
+
+    return res
+      .status(201)
+      .json(new ApiResponse(201, coupon, "Coupon created successfully"));
+  } else {
+    const exists = memoryAdminStore.coupons.some((c) => c.code === normalizedCode);
+    if (exists) {
+      throw new ApiError(409, `Coupon with code "${normalizedCode}" already exists`);
+    }
+
+    const mockCoupon = {
+      _id: `coup_${Date.now()}`,
+      code: normalizedCode,
+      name: name.trim(),
+      description: description ? description.trim() : "",
+      discountType,
+      discountValue: numVal,
+      minimumOrderValue: Number(minimumOrderValue) || 0,
+      maximumDiscountAmount: maximumDiscountAmount !== null && maximumDiscountAmount !== undefined ? Number(maximumDiscountAmount) : null,
+      startAt: startAt ? new Date(startAt) : new Date(),
+      expiresAt: new Date(expiresAt),
+      isActive: Boolean(isActive),
+      usageLimit: usageLimit !== null && usageLimit !== undefined ? Number(usageLimit) : null,
+      usedCount: 0,
+      perUserLimit: Number(perUserLimit) || 1,
+      firstOrderOnly: Boolean(firstOrderOnly),
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    };
+
+    memoryAdminStore.coupons.unshift(mockCoupon);
+
+    return res
+      .status(201)
+      .json(new ApiResponse(201, mockCoupon, "Coupon created successfully"));
+  }
+});
+
+export const getAdminCouponById = asyncHandler(async (req, res) => {
+  const { id } = req.params;
+
+  if (mongoose.connection.readyState === 1) {
+    const coupon = await Coupon.findById(id)
+      .populate("applicableProducts", "productName price")
+      .populate("applicableCategories", "name slug")
+      .lean();
+    if (!coupon) {
+      throw new ApiError(404, "Coupon not found");
+    }
+    return res.status(200).json(new ApiResponse(200, coupon, "Coupon retrieved"));
+  } else {
+    const coupon = memoryAdminStore.coupons.find(
+      (c) => c._id.toString() === id || c.code === id
+    );
+    if (!coupon) {
+      throw new ApiError(404, "Coupon not found");
+    }
+    return res.status(200).json(new ApiResponse(200, coupon, "Coupon retrieved"));
+  }
+});
+
+export const updateAdminCoupon = asyncHandler(async (req, res) => {
+  const { id } = req.params;
+  const updates = { ...req.body };
+  delete updates.code; // Prevent code modification
+  delete updates.usedCount; // Prevent tampering with usage count
+
+  if (updates.discountType && !["PERCENTAGE", "FIXED"].includes(updates.discountType)) {
+    throw new ApiError(400, "Discount type must be PERCENTAGE or FIXED");
+  }
+  if (updates.discountValue !== undefined) {
+    const val = Number(updates.discountValue);
+    if (isNaN(val) || val < 0) {
+      throw new ApiError(400, "Discount value must be a positive number");
+    }
+    if (updates.discountType === "PERCENTAGE" && val > 100) {
+      throw new ApiError(400, "Percentage discount value cannot exceed 100%");
+    }
+    updates.discountValue = val;
+  }
+
+  if (mongoose.connection.readyState === 1) {
+    const coupon = await Coupon.findByIdAndUpdate(id, updates, { new: true });
+    if (!coupon) {
+      throw new ApiError(404, "Coupon not found");
+    }
+
+    await logAdminAction(req.user._id, "COUPON_UPDATED", "COUPON", id, updates);
+
+    return res.status(200).json(new ApiResponse(200, coupon, "Coupon updated successfully"));
+  } else {
+    const idx = memoryAdminStore.coupons.findIndex((c) => c._id.toString() === id);
+    if (idx === -1) {
+      throw new ApiError(404, "Coupon not found");
+    }
+    const updated = { ...memoryAdminStore.coupons[idx], ...updates, updatedAt: new Date() };
+    memoryAdminStore.coupons[idx] = updated;
+
+    return res.status(200).json(new ApiResponse(200, updated, "Coupon updated successfully"));
+  }
+});
+
+export const toggleAdminCouponStatus = asyncHandler(async (req, res) => {
+  const { id } = req.params;
+
+  if (mongoose.connection.readyState === 1) {
+    const coupon = await Coupon.findById(id);
+    if (!coupon) {
+      throw new ApiError(404, "Coupon not found");
+    }
+
+    coupon.isActive = !coupon.isActive;
+    await coupon.save();
+
+    await logAdminAction(
+      req.user._id,
+      "COUPON_STATUS_CHANGED",
+      "COUPON",
+      id,
+      { isActive: coupon.isActive }
+    );
+
+    return res
+      .status(200)
+      .json(
+        new ApiResponse(
+          200,
+          coupon,
+          `Coupon ${coupon.isActive ? "activated" : "deactivated"} successfully`
+        )
+      );
+  } else {
+    const idx = memoryAdminStore.coupons.findIndex((c) => c._id.toString() === id);
+    if (idx === -1) {
+      throw new ApiError(404, "Coupon not found");
+    }
+    memoryAdminStore.coupons[idx].isActive = !memoryAdminStore.coupons[idx].isActive;
+    return res
+      .status(200)
+      .json(
+        new ApiResponse(
+          200,
+          memoryAdminStore.coupons[idx],
+          `Coupon status updated`
+        )
+      );
+  }
+});
+
+export const deleteAdminCoupon = asyncHandler(async (req, res) => {
+  const { id } = req.params;
+
+  if (mongoose.connection.readyState === 1) {
+    const coupon = await Coupon.findByIdAndUpdate(
+      id,
+      { isActive: false },
+      { new: true }
+    );
+    if (!coupon) {
+      throw new ApiError(404, "Coupon not found");
+    }
+
+    await logAdminAction(req.user._id, "COUPON_DELETED", "COUPON", id);
+
+    return res.status(200).json(new ApiResponse(200, coupon, "Coupon deactivated successfully"));
+  } else {
+    const idx = memoryAdminStore.coupons.findIndex((c) => c._id.toString() === id);
+    if (idx === -1) {
+      throw new ApiError(404, "Coupon not found");
+    }
+    memoryAdminStore.coupons[idx].isActive = false;
+    return res.status(200).json(new ApiResponse(200, memoryAdminStore.coupons[idx], "Coupon deactivated successfully"));
   }
 });

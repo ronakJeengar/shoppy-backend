@@ -10,6 +10,7 @@ import { Review } from "../../models/review.model.js";
 import { Notification } from "../../models/notification.model.js";
 import { Cart } from "../../models/cart.model.js";
 import { Wishlist } from "../../models/wishlist.model.js";
+import { Coupon } from "../../models/coupon.model.js";
 import { calculateOrderTax } from "../../services/tax.service.js";
 
 dotenv.config();
@@ -33,6 +34,7 @@ export const seedDatabase = async () => {
     Notification.deleteMany({}),
     Cart.deleteMany({}),
     Wishlist.deleteMany({}),
+    Coupon.deleteMany({}),
   ]);
 
   console.log("🧹 Cleared all collections.");
@@ -1135,6 +1137,122 @@ export const seedDatabase = async () => {
 
   console.log(`🛒 Seeded active cart and wishlist for customer.`);
 
+  // 10. Seed Realistic Indian E-Commerce Coupons
+  const now = new Date();
+  const nextMonth = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000);
+  const nextYear = new Date(now.getTime() + 365 * 24 * 60 * 60 * 1000);
+  const lastMonth = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+
+  const couponDocs = await Coupon.create([
+    {
+      code: "WELCOME10",
+      name: "Welcome 10% Off",
+      description: "Get 10% off up to ₹250 on your first purchase above ₹499",
+      discountType: "PERCENTAGE",
+      discountValue: 10,
+      minimumOrderValue: 499,
+      maximumDiscountAmount: 250,
+      startAt: lastMonth,
+      expiresAt: nextYear,
+      isActive: true,
+      usageLimit: 10000,
+      perUserLimit: 1,
+      firstOrderOnly: true,
+    },
+    {
+      code: "FLAT500",
+      name: "Flat ₹500 Off",
+      description: "Flat ₹500 discount on orders above ₹2,499",
+      discountType: "FIXED",
+      discountValue: 500,
+      minimumOrderValue: 2499,
+      maximumDiscountAmount: null,
+      startAt: lastMonth,
+      expiresAt: nextYear,
+      isActive: true,
+      usageLimit: 5000,
+      perUserLimit: 2,
+      firstOrderOnly: false,
+    },
+    {
+      code: "FESTIVE20",
+      name: "Festive Dhamaka 20% Off",
+      description: "20% off up to ₹1,000 on orders above ₹999",
+      discountType: "PERCENTAGE",
+      discountValue: 20,
+      minimumOrderValue: 999,
+      maximumDiscountAmount: 1000,
+      startAt: lastMonth,
+      expiresAt: nextMonth,
+      isActive: true,
+      usageLimit: 2000,
+      perUserLimit: 1,
+      firstOrderOnly: false,
+    },
+    {
+      code: "FREESHIP",
+      name: "Shipping Discount",
+      description: "Flat ₹100 off on all orders above ₹499",
+      discountType: "FIXED",
+      discountValue: 100,
+      minimumOrderValue: 499,
+      maximumDiscountAmount: null,
+      startAt: lastMonth,
+      expiresAt: nextYear,
+      isActive: true,
+      usageLimit: null,
+      perUserLimit: 5,
+      firstOrderOnly: false,
+    },
+    {
+      code: "SUMMER15",
+      name: "Summer Savings 15%",
+      description: "15% off up to ₹500 on all orders above ₹799",
+      discountType: "PERCENTAGE",
+      discountValue: 15,
+      minimumOrderValue: 799,
+      maximumDiscountAmount: 500,
+      startAt: lastMonth,
+      expiresAt: nextMonth,
+      isActive: true,
+      usageLimit: 1000,
+      perUserLimit: 2,
+      firstOrderOnly: false,
+    },
+    {
+      code: "EXPIRED10",
+      name: "Expired Promo 10%",
+      description: "Testing expired coupon code",
+      discountType: "PERCENTAGE",
+      discountValue: 10,
+      minimumOrderValue: 200,
+      maximumDiscountAmount: 100,
+      startAt: new Date(now.getTime() - 60 * 24 * 60 * 60 * 1000),
+      expiresAt: lastMonth,
+      isActive: true,
+      usageLimit: 100,
+      perUserLimit: 1,
+      firstOrderOnly: false,
+    },
+    {
+      code: "INACTIVE50",
+      name: "Inactive Super 50%",
+      description: "Testing inactive coupon code",
+      discountType: "PERCENTAGE",
+      discountValue: 50,
+      minimumOrderValue: 100,
+      maximumDiscountAmount: 500,
+      startAt: lastMonth,
+      expiresAt: nextYear,
+      isActive: false,
+      usageLimit: 100,
+      perUserLimit: 1,
+      firstOrderOnly: false,
+    },
+  ]);
+
+  console.log(`🎟️ Seeded ${couponDocs.length} coupons.`);
+
   return {
     categories: categoryDocs.length,
     products: productDocs.length,
@@ -1143,6 +1261,7 @@ export const seedDatabase = async () => {
     orders: 2,
     reviews: 5,
     notifications: 3,
+    coupons: couponDocs.length,
   };
 };
 

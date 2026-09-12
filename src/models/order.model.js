@@ -111,6 +111,12 @@ const orderSchema = new Schema(
       min: 0,
       default: 0,
     },
+    coupon: {
+      code: { type: String, trim: true, uppercase: true, default: "" },
+      discountType: { type: String, enum: ["PERCENTAGE", "FIXED", ""], default: "" },
+      discountValue: { type: Number, default: 0 },
+      discountAmount: { type: Number, default: 0 },
+    },
     shippingFee: {
       type: Number,
       required: true,

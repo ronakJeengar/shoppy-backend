@@ -19,6 +19,12 @@ import {
   updateAdminUserStatus,
   updateAdminUserRole,
   getAdminAuditLogs,
+  getAdminCoupons,
+  createAdminCoupon,
+  getAdminCouponById,
+  updateAdminCoupon,
+  toggleAdminCouponStatus,
+  deleteAdminCoupon,
 } from "../controllers/admin.controller.js";
 import {
   getAdminReviews,
@@ -89,6 +95,14 @@ router.delete("/knowledge/:id", deleteAdminKnowledgeDocument);
 // 9. Remote App Configuration Management
 router.get("/config", getAdminAppConfig);
 router.patch("/config", updateAdminAppConfig);
+
+// 10. Coupon & Promotion Management
+router.get("/coupons", getAdminCoupons);
+router.post("/coupons", createAdminCoupon);
+router.get("/coupons/:id", getAdminCouponById);
+router.patch("/coupons/:id", updateAdminCoupon);
+router.patch("/coupons/:id/status", toggleAdminCouponStatus);
+router.delete("/coupons/:id", deleteAdminCoupon);
 
 export default router;
 

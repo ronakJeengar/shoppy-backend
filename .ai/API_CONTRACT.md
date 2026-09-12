@@ -42,3 +42,17 @@ Base URL: `http://localhost:8000/api/v1`
 - `GET /recommendations?type=PERSONALIZED|TRENDING|SIMILAR_PRODUCTS|FREQUENTLY_BOUGHT_TOGETHER` - Non-authoritative recommendations powered by vector/collaborative signals.
 - `POST /recommendations/events` - Track user interactions (VIEW_PRODUCT, ADD_TO_CART, WISHLIST_ADD).
 - `POST /ai/assistant/chat` - Natural language shopping assistant returning structured response with intent, products, and non-authoritative recommendations.
+
+## 7. Coupons & Promotions (Feature 2)
+- `GET /coupons/available` - List all active, non-expired coupons available for promotion and discovery.
+- `POST /coupons/validate` - Validate coupon against cart or items; returns authoritative discount amount, new subtotal, and validity constraints.
+- `POST /cart/coupon` - Apply coupon code to user's cart; authoritatively computes discount, updates cart totals and GST, and returns cart snapshot.
+- `DELETE /cart/coupon` - Remove applied coupon from user's cart and recalculate standard totals.
+
+## 8. Admin Coupon Management
+- `GET /admin/coupons` - List coupons with pagination and status filters (`active`, `inactive`, `expired`). Requires ADMIN role.
+- `POST /admin/coupons` - Create a new coupon rule (`code`, `discountType`, `discountValue`, `minimumOrderValue`, `maximumDiscountAmount`, `startAt`, `expiresAt`, `usageLimit`, `perUserLimit`, `firstOrderOnly`).
+- `GET /admin/coupons/:id` - Fetch coupon details and usage statistics.
+- `PATCH /admin/coupons/:id` - Update coupon parameters.
+- `PATCH /admin/coupons/:id/status` - Toggle active/inactive status.
+- `DELETE /admin/coupons/:id` - Soft or hard delete coupon.

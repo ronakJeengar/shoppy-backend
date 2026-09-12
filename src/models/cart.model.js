@@ -23,6 +23,12 @@ const cartSchema = new Schema(
       unique: true,
     },
     items: [cartItemSchema],
+    couponCode: {
+      type: String,
+      trim: true,
+      uppercase: true,
+      default: null,
+    },
   },
   {
     timestamps: true,

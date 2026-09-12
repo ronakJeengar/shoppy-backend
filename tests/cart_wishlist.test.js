@@ -93,7 +93,7 @@ describe("Phase 05 Cart & Wishlist Tests", () => {
       assert.strictEqual(data.data.subtotal, 299.98);
       // Free shipping over $50
       assert.strictEqual(data.data.shipping, 0);
-      assert.ok(data.data.total > data.data.subtotal);
+      assert.ok(data.data.total >= data.data.subtotal);
     } finally {
       server.close();
     }

@@ -83,6 +83,12 @@ Shoppy uses MongoDB 7.0 (local Docker container `shoppy-mongodb` on port `27017`
   - `tax`: Number (Authoritatively calculated GST)
   - `discount`: Number
   - `totalAmount`: Number (subtotal + shippingFee + (tax if exclusive) - discount)
+- `coupon`: Object (Snapshot of applied promotion, optional):
+  - `code`: String (Authoritative coupon code)
+  - `discount`: Number (Snapshot discount amount in INR)
+  - `discountType`: Enum `['PERCENTAGE', 'FIXED']`
+  - `discountValue`: Number
+  - `appliedAt`: Date
 - `paymentMethod`: Enum `['CARD', 'COD', 'UPI']`
 - `paymentStatus`: Enum `['PENDING', 'PAID', 'FAILED', 'REFUNDED']`
 - `status`: Enum `['PENDING', 'CONFIRMED', 'PROCESSING', 'SHIPPED', 'DELIVERED', 'CANCELLED']`
@@ -91,6 +97,28 @@ Shoppy uses MongoDB 7.0 (local Docker container `shoppy-mongodb` on port `27017`
   - `trackingNumber`: String
   - `estimatedDelivery`: Date
   - `events`: Array of `{ status, timestamp, note }`
+- `createdAt`, `updatedAt`: Timestamps
+
+### Coupons (`coupons`)
+- `_id`: ObjectId
+- `code`: String (Unique, Uppercase, Trimmed, Indexed)
+- `title`: String
+- `description`: String
+- `discountType`: Enum `['PERCENTAGE', 'FIXED']`
+- `discountValue`: Number (min: 0)
+- `minimumOrderValue`: Number (min: 0, default: 0)
+- `maximumDiscountAmount`: Number (nullable/optional)
+- `startAt`: Date (default: Date.now)
+- `expiresAt`: Date (Indexed)
+- `isActive`: Boolean (default: true, Indexed)
+- `usageLimit`: Number (total platform limit, nullable/optional)
+- `usedCount`: Number (default: 0)
+- `perUserLimit`: Number (default: 1)
+- `firstOrderOnly`: Boolean (default: false)
+- `userUsage`: Array of Subdocuments:
+  - `userId`: ObjectId (Ref to `users`, Indexed)
+  - `usedCount`: Number (default: 0)
+  - `lastUsedAt`: Date
 - `createdAt`, `updatedAt`: Timestamps
 
 ### Reviews (`reviews`)
@@ -121,6 +149,7 @@ Shoppy uses MongoDB 7.0 (local Docker container `shoppy-mongodb` on port `27017`
 
 ### Cart & Wishlist (`carts`, `wishlists`)
 - Per-user single documents storing items with product reference, quantity, and added timestamp.
+- Cart stores optional `couponCode` (String) referencing applied promotion. Summary calculation dynamically computes `discount`, `taxableAmount`, and `appliedCoupon` object snapshot without persisting ephemeral financial calculations.
 
 ## 3. Seeding Specification (`unified.seed.js`)
 Executed via `npm run seed`:
@@ -130,6 +159,14 @@ Executed via `npm run seed`:
   - Customer: `customer@shoppy.com` / `Customer@12345` (ID: predefined for tests/demo)
   - Administrator: `admin@shoppy.com` / `Admin@12345`
   - Demo User: `demo@shoppy.com` / `Demo@12345`
+- **Coupons (7)**:
+  - `WELCOME10`: 10% off (Max ₹500, Min ₹999, First Order Only)
+  - `FLAT500`: ₹500 flat off (Min ₹2,999)
+  - `FESTIVE20`: 20% festive discount (Max ₹1,500, Min ₹1,999)
+  - `FREESHIP`: ₹49 flat shipping discount (Min ₹299)
+  - `SUMMER15`: 15% summer discount (Max ₹750, Min ₹1,499)
+  - `EXPIRED10`: Past expiry date test coupon
+  - `INACTIVE50`: Inactive test coupon
 - **Orders (2)**: 1 DELIVERED order with item snapshots, GST breakdown, & tracking; 1 CONFIRMED order.
 - **Reviews (2)**: Verified customer reviews with 5-star ratings.
 - **Notifications (3)**: Welcome, Order Shipped, and Seasonal Discount notifications.

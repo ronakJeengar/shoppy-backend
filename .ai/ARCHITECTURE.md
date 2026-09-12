@@ -512,3 +512,36 @@ Shoppy implements an authoritative Indian Goods and Services Tax (GST) calculati
 * **Standard Currency**: Centralized to Indian Rupee (`INR`, `₹`).
 * **Client-Side Currency Formatter (`CurrencyFormatter`)**: Formats numbers strictly using the Indian numbering system (Lakhs and Crores, `₹12,999.00`, `₹1,29,999.00`, compact `₹1.5 L`, `₹2.5 Cr`).
 * **Zero Currency Ambiguity**: All fallback currencies, AI prompts, mock seeds, filter sheets, admin dashboards, and checkout flows migrated from `$` to `₹`. Zero hardcoded dollar signs or generic 8% sales tax remaining.
+ 
+---
+ 
+## 11. Feature 2: Indian Coupon & Promotion System
+ 
+Shoppy implements a secure, backend-authoritative Indian coupon and discount engine integrated directly with the GST tax calculation pipeline.
+ 
+### 11.1 Authoritative Backend Coupon Engine (`src/services/coupon.service.js`)
+* **Financial Authority**: The backend is the sole authority for coupon validity, discount calculation, minimum order requirements, maximum discount caps, usage caps, and user restrictions. Flutter never calculates or overrides discounts.
+* **Discount Types**:
+  - `PERCENTAGE`: Calculated as `subtotal * (discountValue / 100)`, bounded strictly by `maximumDiscountAmount` if defined.
+  - `FIXED`: Fixed INR amount deducted from subtotal; automatically clamped to never exceed `subtotal`.
+* **Indian E-Commerce Rules & Restrictions**:
+  - `minimumOrderValue`: Subtotal must meet or exceed this threshold.
+  - `maximumDiscountAmount`: Upper ceiling for percentage discounts (e.g., 20% off up to ₹1,500).
+  - `perUserLimit`: Maximum number of times a single customer ID can redeem the coupon.
+  - `firstOrderOnly`: Validates that the customer has zero prior non-cancelled orders.
+  - `usageLimit`: Total platform-wide redemptions across all users.
+  - `startAt` and `expiresAt`: UTC timestamp validity window.
+  - `isActive`: Administrative toggle.
+* **Interaction with Indian GST**:
+  - Discounts are subtracted *prior* to tax evaluation:
+    $$\text{Effective Price} = \text{Base Price} - \text{Item Discount}$$
+    $$\text{Taxable Value} = \frac{\text{Effective Price}}{1 + \frac{\text{Rate}}{100}}$$
+    $$\text{GST} = \text{Effective Price} - \text{Taxable Value}$$
+  - Preserves statutory tax-inclusive pricing, prevents double taxation, and ensures grand total cannot be negative.
+* **Concurrency & Usage Tracking**:
+  - Validated and snapshotted at checkout (`POST /checkout/create`).
+  - Atomically increments `usedCount` and records per-user redemption via `consumeCouponUsage`.
+  - Immutable coupon snapshot stored in `order.coupon` (`code`, `discount`, `discountType`, `discountValue`, `appliedAt`).
+* **Cart Lifecycle & Stale Eviction**:
+  - Adding or removing cart items automatically re-evaluates the applied coupon.
+  - If cart subtotal drops below `minimumOrderValue`, the backend gracefully drops the stale coupon without throwing unhandled errors, returning recalculated standard totals.

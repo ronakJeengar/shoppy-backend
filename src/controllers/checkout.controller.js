@@ -8,6 +8,10 @@ import { ApiError } from "../utils/apiError.js";
 import { ApiResponse } from "../utils/apiResponse.js";
 import { asyncHandler } from "../utils/asyncHandler.js";
 import { calculateOrderTax } from "../services/tax.service.js";
+import {
+  validateAndCalculateCoupon,
+  consumeCouponUsage,
+} from "../services/coupon.service.js";
 
 // Offline in-memory state for test runners
 const inMemoryOrders = new Map();
@@ -105,10 +109,33 @@ export const validateCheckout = asyncHandler(async (req, res) => {
       });
     }
 
+    const activeCouponCode = req.body.couponCode || cart.couponCode;
+    let couponResult = null;
+    let discount = 0;
+
+    if (activeCouponCode) {
+      try {
+        couponResult = await validateAndCalculateCoupon({
+          code: activeCouponCode,
+          cartItems: revalidatedItems,
+          userId: req.user._id,
+          now: new Date(),
+        });
+        discount = couponResult.discountAmount;
+      } catch (err) {
+        if (req.body.couponCode) {
+          throw err;
+        }
+        couponResult = null;
+        discount = 0;
+      }
+    }
+
     const totals = computeCheckoutTotals(
       revalidatedItems,
       shippingMethod,
-      address.state
+      address.state,
+      discount
     );
 
     return res.status(200).json(
@@ -120,6 +147,17 @@ export const validateCheckout = asyncHandler(async (req, res) => {
           shippingAddress: address,
           shippingMethod,
           customerGstin: customerGstin || "",
+          coupon: couponResult
+            ? {
+                code: couponResult.code,
+                name: couponResult.name,
+                description: couponResult.description,
+                discountType: couponResult.discountType,
+                discountValue: couponResult.discountValue,
+                discountAmount: couponResult.discountAmount,
+              }
+            : null,
+          couponCode: couponResult?.code || null,
           ...totals,
         },
         "Checkout validated successfully"
@@ -155,10 +193,26 @@ export const validateCheckout = asyncHandler(async (req, res) => {
     },
   ];
 
+  let discount = 0;
+  let couponResult = null;
+  if (req.body.couponCode) {
+    try {
+      couponResult = await validateAndCalculateCoupon({
+        code: req.body.couponCode,
+        cartItems: sampleItems,
+        userId: req.user._id,
+      });
+      discount = couponResult.discountAmount;
+    } catch (err) {
+      throw err;
+    }
+  }
+
   const totals = computeCheckoutTotals(
     sampleItems,
     shippingMethod,
-    fallbackAddress.state
+    fallbackAddress.state,
+    discount
   );
 
   return res.status(200).json(
@@ -170,6 +224,17 @@ export const validateCheckout = asyncHandler(async (req, res) => {
         shippingAddress: fallbackAddress,
         shippingMethod,
         customerGstin: customerGstin || "",
+        coupon: couponResult
+          ? {
+              code: couponResult.code,
+              name: couponResult.name,
+              description: couponResult.description,
+              discountType: couponResult.discountType,
+              discountValue: couponResult.discountValue,
+              discountAmount: couponResult.discountAmount,
+            }
+          : null,
+        couponCode: couponResult?.code || null,
         ...totals,
       },
       "Checkout validated successfully"
@@ -289,11 +354,34 @@ export const createOrderFromCheckout = asyncHandler(async (req, res) => {
       });
     }
 
+    const activeCouponCode = req.body.couponCode || cart.couponCode;
+    let couponResult = null;
+    let discount = 0;
+
+    if (activeCouponCode) {
+      try {
+        couponResult = await validateAndCalculateCoupon({
+          code: activeCouponCode,
+          cartItems: orderItemsSnapshot,
+          userId: req.user._id,
+          now: new Date(),
+        });
+        discount = couponResult.discountAmount;
+      } catch (err) {
+        if (req.body.couponCode) {
+          throw err;
+        }
+        couponResult = null;
+        discount = 0;
+      }
+    }
+
     // 5. Authoritative Financial Calculations with GST Engine
     const totals = computeCheckoutTotals(
       orderItemsSnapshot,
       shippingMethod,
-      address.state
+      address.state,
+      discount
     );
 
     // 6. Payment Generation
@@ -313,6 +401,14 @@ export const createOrderFromCheckout = asyncHandler(async (req, res) => {
       shippingMethod,
       subtotal: totals.subtotal,
       discount: totals.discount || 0,
+      coupon: couponResult
+        ? {
+            code: couponResult.code,
+            discountType: couponResult.discountType,
+            discountValue: couponResult.discountValue,
+            discountAmount: totals.discount || 0,
+          }
+        : undefined,
       shippingFee: totals.shippingFee,
       tax: totals.tax,
       taxBreakdown: totals.taxBreakdown,
@@ -323,6 +419,11 @@ export const createOrderFromCheckout = asyncHandler(async (req, res) => {
       status: initialOrderStatus,
       idempotencyKey,
     });
+
+    // Authoritative atomic consumption of coupon usage
+    if (couponResult) {
+      await consumeCouponUsage(couponResult.code, req.user._id);
+    }
 
     const payment = await Payment.create({
       order: order._id,
@@ -344,6 +445,7 @@ export const createOrderFromCheckout = asyncHandler(async (req, res) => {
 
     // 7. Clear User's Cart
     cart.items = [];
+    cart.couponCode = null;
     await cart.save();
 
     const responsePayload = {
@@ -397,10 +499,26 @@ export const createOrderFromCheckout = asyncHandler(async (req, res) => {
     },
   ];
 
+  let discount = 0;
+  let couponResult = null;
+  if (req.body.couponCode) {
+    try {
+      couponResult = await validateAndCalculateCoupon({
+        code: req.body.couponCode,
+        cartItems: sampleItems,
+        userId: req.user._id,
+      });
+      discount = couponResult.discountAmount;
+    } catch (err) {
+      throw err;
+    }
+  }
+
   const totals = computeCheckoutTotals(
     sampleItems,
     shippingMethod,
-    fallbackAddress.state
+    fallbackAddress.state,
+    discount
   );
   const transactionId = `txn_offline_${Date.now()}`;
   const initialOrderStatus =
@@ -416,6 +534,14 @@ export const createOrderFromCheckout = asyncHandler(async (req, res) => {
     shippingMethod,
     subtotal: totals.subtotal,
     discount: totals.discount || 0,
+    coupon: couponResult
+      ? {
+          code: couponResult.code,
+          discountType: couponResult.discountType,
+          discountValue: couponResult.discountValue,
+          discountAmount: totals.discount || 0,
+        }
+      : undefined,
     shippingFee: totals.shippingFee,
     tax: totals.tax,
     taxBreakdown: totals.taxBreakdown,
