@@ -65,17 +65,21 @@ export class GetCartTool extends AITool {
           };
         });
 
-      subtotal = Math.round(subtotal * 100) / 100;
-      const shipping = subtotal > 50 || subtotal === 0 ? 0 : 4.99;
-      const tax = Math.round(subtotal * 0.08 * 100) / 100;
-      const total = Math.round((subtotal + shipping + tax) * 100) / 100;
+      subtotal = Math.round((subtotal + Number.EPSILON) * 100) / 100;
+      const shipping = subtotal >= 299 || subtotal === 0 ? 0 : 49.0;
+      const taxResult = calculateOrderTax({
+        items,
+        shippingFee: shipping,
+      });
 
       return {
         itemCount,
         subtotal,
         shipping,
-        tax,
-        total,
+        tax: taxResult.tax,
+        taxBreakdown: taxResult.taxBreakdown,
+        total: taxResult.grandTotal,
+        currency: "INR",
         items,
       };
     } else {
@@ -88,47 +92,53 @@ export class GetCartTool extends AITool {
           shipping: 0,
           tax: 0,
           total: 0,
+          currency: "INR",
           items: [],
-          message: "Your shopping cart is currently empty.",
         };
       }
 
       let subtotal = 0;
       let itemCount = 0;
+
       const items = userItems
         .filter((item) => item.product)
         .map((item) => {
           const p = item.product;
-          const qty = item.quantity;
-          const unitPrice = typeof p.price === "number" ? p.price : 0;
-          const lineTotal = Math.round(unitPrice * qty * 100) / 100;
+          const qty = item.quantity || 1;
+          const price = typeof p.price === "number" ? p.price : 0;
+          const lineTotal = Math.round(price * qty * 100) / 100;
           subtotal += lineTotal;
           itemCount += qty;
 
           return {
-            id: item._id ? item._id.toString() : (p._id || p.id).toString(),
-            productId: (p._id || p.id).toString(),
-            name: p.productName || "Product",
-            price: unitPrice,
+            productId: p._id || p.id,
+            name: p.productName || p.name || "Product",
+            price,
             quantity: qty,
             lineTotal,
             inStock: (p.stock !== undefined ? p.stock : 99) >= qty,
             seller: p.sellerName || "Store",
             productImage: p.productImage || "",
+            hsnCode: p.hsnCode || "8518",
+            gstRate: p.gstRate !== undefined ? p.gstRate : 18,
           };
         });
 
-      subtotal = Math.round(subtotal * 100) / 100;
-      const shipping = subtotal > 50 || subtotal === 0 ? 0 : 4.99;
-      const tax = Math.round(subtotal * 0.08 * 100) / 100;
-      const total = Math.round((subtotal + shipping + tax) * 100) / 100;
+      subtotal = Math.round((subtotal + Number.EPSILON) * 100) / 100;
+      const shipping = subtotal >= 299 || subtotal === 0 ? 0 : 49.0;
+      const taxResult = calculateOrderTax({
+        items,
+        shippingFee: shipping,
+      });
 
       return {
         itemCount,
         subtotal,
         shipping,
-        tax,
-        total,
+        tax: taxResult.tax,
+        taxBreakdown: taxResult.taxBreakdown,
+        total: taxResult.grandTotal,
+        currency: "INR",
         items,
       };
     }

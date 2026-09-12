@@ -490,5 +490,25 @@ The final transformation of Shoppy brings production-grade architectural rigor a
   - Interactive multi-step visual tracker (`Placed` -> `Confirmed` -> `Processing` -> `Shipped` -> `Delivered` / `Cancelled`).
   - Integrated carrier badge with one-tap tracking number clipboard copy.
 
+---
 
+## 10. Feature 1: Indian GST / Tax Architecture & Centralized Indian Rupee (₹) System
 
+Shoppy implements an authoritative Indian Goods and Services Tax (GST) calculation engine and centralized Indian Rupee currency architecture.
+
+### 10.1 Authoritative Backend GST Engine (`src/services/tax.service.js`)
+* **GST Slab Support**: 0%, 5%, 12%, 18%, 28% rates mapped via HSN codes to product catalog.
+* **Tax Calculation Modes**:
+  - **Tax Inclusive (Default)**: $\text{Taxable Value} = \frac{\text{Effective Price}}{1 + \frac{\text{Rate}}{100}}$, $\text{GST Amount} = \text{Effective Price} - \text{Taxable Value}$. Display prices include GST without checkout price shock.
+  - **Tax Exclusive**: $\text{Taxable Value} = \text{Effective Price}$, $\text{GST Amount} = \frac{\text{Taxable Value} \times \text{Rate}}{100}$. Added to order grand total.
+* **Origin-Based Dual-Tax Regime**:
+  - Store Origin State: Configurable (`KARNATAKA` by default via `AppConfig`).
+  - **Intra-State Supply** (Delivery state equals Origin state): GST is split equally into **CGST** (50%) and **SGST** (50%).
+  - **Inter-State Supply** (Delivery state differs from Origin state): 100% of GST is levied as **IGST**.
+* **Order Tax Snapshot**: Every order snapshots `taxBreakdown` (`cgst`, `sgst`, `igst`, `rates`, `taxableAmount`, `totalTax`, `isInterState`) and `customerGstin` for statutory B2B/B2C compliance.
+* **Indian Shipping Rules**: Standard shipping free over ₹499 (otherwise ₹49); Express shipping fixed at ₹99.
+
+### 10.2 Centralized Indian Currency (₹) Architecture
+* **Standard Currency**: Centralized to Indian Rupee (`INR`, `₹`).
+* **Client-Side Currency Formatter (`CurrencyFormatter`)**: Formats numbers strictly using the Indian numbering system (Lakhs and Crores, `₹12,999.00`, `₹1,29,999.00`, compact `₹1.5 L`, `₹2.5 Cr`).
+* **Zero Currency Ambiguity**: All fallback currencies, AI prompts, mock seeds, filter sheets, admin dashboards, and checkout flows migrated from `$` to `₹`. Zero hardcoded dollar signs or generic 8% sales tax remaining.

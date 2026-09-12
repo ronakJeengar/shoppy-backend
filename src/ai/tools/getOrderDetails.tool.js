@@ -83,7 +83,7 @@ export class GetOrderDetailsTool extends AITool {
         carrier: order.carrier || "Standard Courier",
         trackingNumber: order.trackingNumber || "Pending shipment",
         totalAmount: order.totalAmount,
-        currency: order.currency || "USD",
+        currency: order.currency || "INR",
         paymentStatus: order.payment?.status || "CONFIRMED",
         createdAt: order.createdAt,
       };
@@ -135,7 +135,7 @@ export class GetOrderDetailsTool extends AITool {
         carrier: order.carrier || "Standard Courier",
         trackingNumber: order.trackingNumber || "Pending shipment",
         totalAmount: order.totalAmount || 0,
-        currency: order.currency || "USD",
+        currency: order.currency || "INR",
         paymentStatus: order.payment?.status || "CONFIRMED",
         createdAt: order.createdAt || new Date(),
       };

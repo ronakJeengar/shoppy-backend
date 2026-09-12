@@ -26,6 +26,31 @@ const productSchema = new Schema(
       default: 0,
       required: true,
     },
+    mrp: {
+      type: Number,
+      default: function () {
+        return this.price || 0;
+      },
+    },
+    hsnCode: {
+      type: String,
+      default: "8518",
+      trim: true,
+    },
+    gstRate: {
+      type: Number,
+      enum: [0, 5, 12, 18, 28],
+      default: 18,
+      required: true,
+    },
+    isTaxInclusive: {
+      type: Boolean,
+      default: true,
+    },
+    isCodEligible: {
+      type: Boolean,
+      default: true,
+    },
     stock: {
       type: Number,
       default: 0,

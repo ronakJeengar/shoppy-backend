@@ -47,6 +47,9 @@ export const DEFAULT_APP_CONFIG = {
   commerce: {
     currency: "INR",
     currencySymbol: "₹",
+    originState: process.env.STORE_ORIGIN_STATE || "KARNATAKA",
+    supportedGstRates: [0, 5, 12, 18, 28],
+    taxInclusive: true,
     supportedPaymentMethods: ["CARD", "UPI", "NET_BANKING", "WALLET", "COD"],
     supportedDeliveryMethods: ["STANDARD", "EXPRESS", "OVERNIGHT"],
   },
@@ -189,6 +192,17 @@ export const getAppBootstrap = asyncHandler(async (req, res) => {
     commerce: {
       currency: rawConfig.commerce?.currency || "INR",
       currencySymbol: rawConfig.commerce?.currencySymbol || "₹",
+      originState:
+        rawConfig.commerce?.originState ||
+        process.env.STORE_ORIGIN_STATE ||
+        "KARNATAKA",
+      supportedGstRates: rawConfig.commerce?.supportedGstRates || [
+        0, 5, 12, 18, 28,
+      ],
+      taxInclusive:
+        rawConfig.commerce?.taxInclusive !== undefined
+          ? Boolean(rawConfig.commerce.taxInclusive)
+          : true,
       supportedPaymentMethods:
         rawConfig.commerce?.supportedPaymentMethods || [
           "CARD",

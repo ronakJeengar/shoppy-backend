@@ -60,6 +60,12 @@ const appConfigSchema = new Schema(
     commerce: {
       currency: { type: String, default: "INR" },
       currencySymbol: { type: String, default: "₹" },
+      originState: { type: String, default: "KARNATAKA" },
+      supportedGstRates: {
+        type: [Number],
+        default: [0, 5, 12, 18, 28],
+      },
+      taxInclusive: { type: Boolean, default: true },
       supportedPaymentMethods: {
         type: [String],
         default: ["CARD", "UPI", "NET_BANKING", "WALLET", "COD"],

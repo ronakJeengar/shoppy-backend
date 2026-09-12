@@ -24,13 +24,13 @@ Base URL: `http://localhost:8000/api/v1`
 - `POST /wishlist/toggle` - Atomically add/remove product to/from user wishlist.
 
 ## 4. Checkout & Orders
-- `GET /addresses` - List user saved delivery addresses.
+- `GET /addresses` - List user saved delivery addresses (with `pinCode`, `district`, `landmark`, `state`, `country: "IN"`).
 - `POST /addresses` - Add new delivery address.
-- `POST /checkout/validate` - Authoritatively validate shipping, subtotal, tax (8%), and grandTotal.
-- `POST /checkout/create` - Create order and initiate payment with idempotency key.
+- `POST /checkout/validate` - Authoritatively validate shipping (Standard: Free over ₹499 else ₹49; Express: ₹99), subtotal, Indian GST breakdown (`taxBreakdown` containing `cgst`, `sgst`, `igst`, `rates`, `taxableAmount`, `totalTax`, `isInterState` evaluated against store origin state `KARNATAKA`), and `grandTotal`.
+- `POST /checkout/create` - Create order and initiate payment with idempotency key, capturing snapshot of `taxBreakdown`, `customerGstin`, and HSN codes.
 - `POST /payments/verify` - Confirm payment signature and transition order to CONFIRMED.
 - `GET /orders` - List user orders sorted by newest first.
-- `GET /orders/:id` - Detailed order breakdown with status history, items snapshot, and tracking.
+- `GET /orders/:id` - Detailed order breakdown with status history, items snapshot, GST breakdown, and tracking.
 - `POST /orders/:id/cancel` - Cancel confirmed order (IDOR protected, stock restored).
 
 ## 5. Reviews & Ratings

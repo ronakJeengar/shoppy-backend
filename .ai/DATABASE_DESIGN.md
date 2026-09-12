@@ -29,9 +29,13 @@ Shoppy uses MongoDB 7.0 (local Docker container `shoppy-mongodb` on port `27017`
 - `productName`: String (Text Indexed, Trimmed)
 - `sellerName`: String (Brand/Merchant)
 - `description`: String (Markdown/Plain text)
-- `price`: Number (Authoritative base price, min: 0)
-- `originalPrice`: Number (MSRP/Comparison price)
+- `price`: Number (Authoritative base price in INR ₹, min: 0)
+- `mrp`: Number (Maximum Retail Price for comparison)
 - `discountPercentage`: Number (Computed/Explicit)
+- `hsnCode`: String (Harmonized System of Nomenclature, e.g. "8518", "6109", "8471")
+- `gstRate`: Number (Enum: `[0, 5, 12, 18, 28]`, Default: `18`)
+- `isTaxInclusive`: Boolean (Default: `true`)
+- `isCodEligible`: Boolean (Default: `true`)
 - `stock`: Number (Authoritative inventory count, min: 0)
 - `productRating`: Number (Aggregated average, min: 0, max: 5)
 - `totalReviews`: Number (Count of verified customer reviews)
@@ -48,22 +52,37 @@ Shoppy uses MongoDB 7.0 (local Docker container `shoppy-mongodb` on port `27017`
 - `_id`: ObjectId
 - `orderNumber`: String (Unique, Format: `ORD-YYYY-XXXXX`)
 - `user`: ObjectId (Ref to `users`, Indexed)
+- `currency`: String (Default: `'INR'`)
 - `orderItems`: Array of Subdocuments:
   - `product`: ObjectId (Ref to `products`)
   - `productName`: String (Snapshot)
   - `productImage`: String (Snapshot)
   - `sellerName`: String (Snapshot)
-  - `unitPrice`: Number (Authoritative snapshot price at checkout)
+  - `unitPrice`: Number (Authoritative snapshot price in INR at checkout)
   - `quantity`: Number (Min: 1)
   - `lineTotal`: Number (unitPrice * quantity)
+  - `hsnCode`: String (Snapshot)
+  - `gstRate`: Number (Snapshot: 0, 5, 12, 18, 28)
+  - `isTaxInclusive`: Boolean (Snapshot)
+  - `taxableAmount`: Number (Snapshot)
+  - `discount`: Number
 - `shippingAddress`: Object (Immutable snapshot):
-  - `fullName`, `phone`, `streetAddress`, `city`, `state`, `postalCode`, `country`
+  - `fullName`, `phone`, `streetAddress`, `landmark`, `city`, `district`, `state`, `postalCode` / `pinCode`, `country`
+- `customerGstin`: String (Optional Indian GSTIN)
+- `taxBreakdown`: Object (Authoritative GST breakdown):
+  - `cgst`: Number (Central GST for intra-state)
+  - `sgst`: Number (State GST for intra-state)
+  - `igst`: Number (Integrated GST for inter-state)
+  - `totalTax`: Number (cgst + sgst + igst)
+  - `taxableAmount`: Number (Total taxable value)
+  - `isInterState`: Boolean (true if delivery state != origin state KARNATAKA)
+  - `rates`: Array of `{ rate, taxableAmount, cgst, sgst, igst }`
 - `pricing`: Object:
   - `subtotal`: Number
-  - `shippingFee`: Number
-  - `tax`: Number (Authoritatively calculated: 8%)
+  - `shippingFee`: Number (Free over ₹499 else ₹49; Express: ₹99)
+  - `tax`: Number (Authoritatively calculated GST)
   - `discount`: Number
-  - `totalAmount`: Number (subtotal + shippingFee + tax - discount)
+  - `totalAmount`: Number (subtotal + shippingFee + (tax if exclusive) - discount)
 - `paymentMethod`: Enum `['CARD', 'COD', 'UPI']`
 - `paymentStatus`: Enum `['PENDING', 'PAID', 'FAILED', 'REFUNDED']`
 - `status`: Enum `['PENDING', 'CONFIRMED', 'PROCESSING', 'SHIPPED', 'DELIVERED', 'CANCELLED']`
@@ -92,10 +111,12 @@ Shoppy uses MongoDB 7.0 (local Docker container `shoppy-mongodb` on port `27017`
 - `fullName`: String
 - `phone`: String
 - `streetAddress`: String
+- `landmark`: String
 - `city`: String
-- `state`: String
-- `postalCode`: String
-- `country`: String (Default: `'United States'`)
+- `district`: String
+- `state`: String (Used for intra-state vs inter-state GST calculations)
+- `pinCode` / `postalCode`: String (6-digit Indian PIN code)
+- `country`: String (Default: `'IN'`)
 - `isDefault`: Boolean (Default: `false`)
 
 ### Cart & Wishlist (`carts`, `wishlists`)
@@ -104,11 +125,11 @@ Shoppy uses MongoDB 7.0 (local Docker container `shoppy-mongodb` on port `27017`
 ## 3. Seeding Specification (`unified.seed.js`)
 Executed via `npm run seed`:
 - **Categories (6)**: Electronics, Fashion & Apparel, Home & Kitchen, Audio & Acoustics, Computing & Tech, Accessories.
-- **Products (18)**: Realistic high-resolution catalog across all 6 categories, complete with tags, stock levels, ratings, reviews count, and galleries.
+- **Products (38)**: Comprehensive high-resolution catalog across all 6 categories, configured with realistic Indian INR pricing, MRPs, HSN codes (e.g. 8518, 6109, 8471), and GST tax rates across 0%, 5%, 12%, 18%, and 28% slabs.
 - **Users (3)**:
   - Customer: `customer@shoppy.com` / `Customer@12345` (ID: predefined for tests/demo)
   - Administrator: `admin@shoppy.com` / `Admin@12345`
   - Demo User: `demo@shoppy.com` / `Demo@12345`
-- **Orders (2)**: 1 DELIVERED order with item snapshots & tracking, 1 CONFIRMED order.
+- **Orders (2)**: 1 DELIVERED order with item snapshots, GST breakdown, & tracking; 1 CONFIRMED order.
 - **Reviews (2)**: Verified customer reviews with 5-star ratings.
 - **Notifications (3)**: Welcome, Order Shipped, and Seasonal Discount notifications.

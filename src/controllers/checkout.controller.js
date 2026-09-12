@@ -7,37 +7,53 @@ import { Payment } from "../models/payment.model.js";
 import { ApiError } from "../utils/apiError.js";
 import { ApiResponse } from "../utils/apiResponse.js";
 import { asyncHandler } from "../utils/asyncHandler.js";
+import { calculateOrderTax } from "../services/tax.service.js";
 
 // Offline in-memory state for test runners
 const inMemoryOrders = new Map();
 const inMemoryPayments = new Map();
 const idempotencyCache = new Map();
 
-// Helper to compute authoritative financial values
-export const computeCheckoutTotals = (items, shippingMethod = "STANDARD") => {
+// Helper to compute authoritative financial values using GST engine
+export const computeCheckoutTotals = (
+  items,
+  shippingMethod = "STANDARD",
+  customerState = "KARNATAKA",
+  discount = 0
+) => {
   const subtotal = items.reduce((sum, item) => sum + item.lineTotal, 0);
-  const roundedSubtotal = Number(subtotal.toFixed(2));
+  const roundedSubtotal = Math.round((subtotal + Number.EPSILON) * 100) / 100;
 
   let shippingFee = 0;
   if (shippingMethod === "EXPRESS") {
-    shippingFee = 9.99;
+    shippingFee = 99.0;
   } else {
-    shippingFee = roundedSubtotal >= 50.0 ? 0.0 : 4.99;
+    shippingFee =
+      roundedSubtotal >= 499.0 || roundedSubtotal === 0 ? 0.0 : 49.0;
   }
 
-  const tax = Number((roundedSubtotal * 0.08).toFixed(2));
-  const grandTotal = Number((roundedSubtotal + shippingFee + tax).toFixed(2));
+  const taxResult = calculateOrderTax({
+    items,
+    customerState,
+    shippingFee,
+    discount,
+  });
 
   return {
+    currency: "INR",
+    currencySymbol: "₹",
     subtotal: roundedSubtotal,
+    discount: taxResult.discount,
+    taxableAmount: taxResult.taxableAmount,
+    taxBreakdown: taxResult.taxBreakdown,
+    tax: taxResult.tax,
     shippingFee,
-    tax,
-    grandTotal,
+    grandTotal: taxResult.grandTotal,
   };
 };
 
 export const validateCheckout = asyncHandler(async (req, res) => {
-  const { addressId, shippingMethod = "STANDARD" } = req.body;
+  const { addressId, shippingMethod = "STANDARD", customerGstin } = req.body;
   const userId = req.user._id.toString();
 
   if (!addressId) {
@@ -82,10 +98,18 @@ export const validateCheckout = asyncHandler(async (req, res) => {
         unitPrice,
         quantity: item.quantity,
         lineTotal,
+        hsnCode: product.hsnCode || "8518",
+        gstRate: product.gstRate !== undefined ? product.gstRate : 18,
+        isTaxInclusive:
+          product.isTaxInclusive !== undefined ? product.isTaxInclusive : true,
       });
     }
 
-    const totals = computeCheckoutTotals(revalidatedItems, shippingMethod);
+    const totals = computeCheckoutTotals(
+      revalidatedItems,
+      shippingMethod,
+      address.state
+    );
 
     return res.status(200).json(
       new ApiResponse(
@@ -95,6 +119,7 @@ export const validateCheckout = asyncHandler(async (req, res) => {
           items: revalidatedItems,
           shippingAddress: address,
           shippingMethod,
+          customerGstin: customerGstin || "",
           ...totals,
         },
         "Checkout validated successfully"
@@ -106,27 +131,35 @@ export const validateCheckout = asyncHandler(async (req, res) => {
   const fallbackAddress = {
     _id: addressId,
     fullName: req.user.fullName || "Test Customer",
-    phone: "1234567890",
-    streetAddress: "123 Market Street",
-    city: "San Francisco",
-    state: "CA",
-    postalCode: "94105",
-    country: "US",
+    phone: "9876543210",
+    streetAddress: "123 Brigade Road",
+    city: "Bangalore",
+    state: "KARNATAKA",
+    postalCode: "560001",
+    pinCode: "560001",
+    country: "IN",
   };
 
   const sampleItems = [
     {
       productId: "64f2b1a2b3c4d5e6f7a8b001",
-      productName: "Wireless Noise-Cancelling Headphones",
+      productName: "Aura Pro Wireless Noise-Cancelling Headphones",
       productImage: "https://images.unsplash.com/photo-1505740420928-5e560c06d30e",
-      sellerName: "SoundTech Official",
-      unitPrice: 149.99,
+      sellerName: "Aura Audio Labs",
+      unitPrice: 12999,
       quantity: 1,
-      lineTotal: 149.99,
+      lineTotal: 12999,
+      hsnCode: "8518",
+      gstRate: 18,
+      isTaxInclusive: true,
     },
   ];
 
-  const totals = computeCheckoutTotals(sampleItems, shippingMethod);
+  const totals = computeCheckoutTotals(
+    sampleItems,
+    shippingMethod,
+    fallbackAddress.state
+  );
 
   return res.status(200).json(
     new ApiResponse(
@@ -136,6 +169,7 @@ export const validateCheckout = asyncHandler(async (req, res) => {
         items: sampleItems,
         shippingAddress: fallbackAddress,
         shippingMethod,
+        customerGstin: customerGstin || "",
         ...totals,
       },
       "Checkout validated successfully"
@@ -203,7 +237,10 @@ export const createOrderFromCheckout = asyncHandler(async (req, res) => {
       city: address.city,
       state: address.state,
       postalCode: address.postalCode,
-      country: address.country || "US",
+      pinCode: address.pinCode || address.postalCode,
+      district: address.district || "",
+      landmark: address.landmark || "",
+      country: address.country || "IN",
     };
 
     // 3. Cart Revalidation
@@ -245,11 +282,19 @@ export const createOrderFromCheckout = asyncHandler(async (req, res) => {
         unitPrice,
         quantity: item.quantity,
         lineTotal,
+        hsnCode: product.hsnCode || "8518",
+        gstRate: product.gstRate !== undefined ? product.gstRate : 18,
+        isTaxInclusive:
+          product.isTaxInclusive !== undefined ? product.isTaxInclusive : true,
       });
     }
 
-    // 5. Authoritative Financial Calculations
-    const totals = computeCheckoutTotals(orderItemsSnapshot, shippingMethod);
+    // 5. Authoritative Financial Calculations with GST Engine
+    const totals = computeCheckoutTotals(
+      orderItemsSnapshot,
+      shippingMethod,
+      address.state
+    );
 
     // 6. Payment Generation
     const transactionId = `txn_${Date.now()}_${Math.random()
@@ -267,11 +312,14 @@ export const createOrderFromCheckout = asyncHandler(async (req, res) => {
       shippingAddress: shippingAddressSnapshot,
       shippingMethod,
       subtotal: totals.subtotal,
+      discount: totals.discount || 0,
       shippingFee: totals.shippingFee,
       tax: totals.tax,
+      taxBreakdown: totals.taxBreakdown,
+      customerGstin: req.body.customerGstin || "",
       totalAmount: totals.grandTotal,
       orderPrice: totals.grandTotal,
-      currency: "USD",
+      currency: "INR",
       status: initialOrderStatus,
       idempotencyKey,
     });
@@ -283,7 +331,7 @@ export const createOrderFromCheckout = asyncHandler(async (req, res) => {
       provider: paymentMethod === "COD" ? "COD" : "SIMULATED",
       paymentMethod,
       amount: totals.grandTotal,
-      currency: "USD",
+      currency: "INR",
       status: initialPaymentStatus,
       metadata: {
         orderNumber,
@@ -304,7 +352,7 @@ export const createOrderFromCheckout = asyncHandler(async (req, res) => {
       paymentInstructions: {
         transactionId,
         amount: totals.grandTotal,
-        currency: "USD",
+        currency: "INR",
         provider: payment.provider,
         paymentMethod,
         requiresAction: paymentMethod !== "COD",
@@ -321,20 +369,39 @@ export const createOrderFromCheckout = asyncHandler(async (req, res) => {
   }
 
   // Offline / Test Fallback
+  const fallbackAddress = {
+    _id: addressId,
+    fullName: req.user.fullName || "Test Customer",
+    phone: "9876543210",
+    streetAddress: "123 Brigade Road",
+    city: "Bangalore",
+    state: "KARNATAKA",
+    postalCode: "560001",
+    pinCode: "560001",
+    country: "IN",
+  };
+
   const sampleItems = [
     {
       _id: new mongoose.Types.ObjectId(),
       productId: new mongoose.Types.ObjectId("64f2b1a2b3c4d5e6f7a8b001"),
-      productName: "Wireless Noise-Cancelling Headphones",
+      productName: "Aura Pro Wireless Noise-Cancelling Headphones",
       productImage: "https://images.unsplash.com/photo-1505740420928-5e560c06d30e",
-      sellerName: "SoundTech Official",
-      unitPrice: 149.99,
+      sellerName: "Aura Audio Labs",
+      unitPrice: 12999,
       quantity: 1,
-      lineTotal: 149.99,
+      lineTotal: 12999,
+      hsnCode: "8518",
+      gstRate: 18,
+      isTaxInclusive: true,
     },
   ];
 
-  const totals = computeCheckoutTotals(sampleItems, shippingMethod);
+  const totals = computeCheckoutTotals(
+    sampleItems,
+    shippingMethod,
+    fallbackAddress.state
+  );
   const transactionId = `txn_offline_${Date.now()}`;
   const initialOrderStatus =
     paymentMethod === "COD" ? "CONFIRMED" : "PENDING_PAYMENT";
@@ -345,22 +412,17 @@ export const createOrderFromCheckout = asyncHandler(async (req, res) => {
     orderNumber,
     customer: userId,
     orderItems: sampleItems,
-    shippingAddress: {
-      fullName: req.user.fullName || "Test Customer",
-      phone: "1234567890",
-      streetAddress: "123 Market Street",
-      city: "San Francisco",
-      state: "CA",
-      postalCode: "94105",
-      country: "US",
-    },
+    shippingAddress: fallbackAddress,
     shippingMethod,
     subtotal: totals.subtotal,
+    discount: totals.discount || 0,
     shippingFee: totals.shippingFee,
     tax: totals.tax,
+    taxBreakdown: totals.taxBreakdown,
+    customerGstin: req.body.customerGstin || "",
     totalAmount: totals.grandTotal,
     orderPrice: totals.grandTotal,
-    currency: "USD",
+    currency: "INR",
     status: initialOrderStatus,
     idempotencyKey,
     createdAt: new Date(),
@@ -375,7 +437,7 @@ export const createOrderFromCheckout = asyncHandler(async (req, res) => {
     provider: paymentMethod === "COD" ? "COD" : "SIMULATED",
     paymentMethod,
     amount: totals.grandTotal,
-    currency: "USD",
+    currency: "INR",
     status: initialPaymentStatus,
     metadata: { orderNumber },
     createdAt: new Date(),
@@ -391,7 +453,7 @@ export const createOrderFromCheckout = asyncHandler(async (req, res) => {
     paymentInstructions: {
       transactionId,
       amount: totals.grandTotal,
-      currency: "USD",
+      currency: "INR",
       provider: offlinePayment.provider,
       paymentMethod,
       requiresAction: paymentMethod !== "COD",

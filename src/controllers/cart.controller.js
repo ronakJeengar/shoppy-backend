@@ -39,7 +39,9 @@ const fallbackCatalog = [
   },
 ];
 
-const calculateCartSummary = (items) => {
+import { calculateOrderTax } from "../services/tax.service.js";
+
+const calculateCartSummary = (items, customerState = "KARNATAKA") => {
   let subtotal = 0;
   let itemCount = 0;
 
@@ -54,7 +56,7 @@ const calculateCartSummary = (items) => {
       itemCount += qty;
 
       return {
-        id: item._id ? item._id.toString() : p._id.toString(),
+        id: item._id ? item._id.toString() : (p._id ? p._id.toString() : p.id),
         productId: p._id ? p._id.toString() : p.id,
         productName: p.productName || p.name || "Product",
         sellerName: p.sellerName || "Official Seller",
@@ -64,21 +66,36 @@ const calculateCartSummary = (items) => {
         stock: p.stock !== undefined ? p.stock : 99,
         isAvailable: (p.stock !== undefined ? p.stock : 99) >= qty,
         lineTotal,
+        hsnCode: p.hsnCode || "8518",
+        gstRate: p.gstRate !== undefined ? p.gstRate : 18,
+        isTaxInclusive:
+          p.isTaxInclusive !== undefined ? p.isTaxInclusive : false,
       };
     });
 
-  subtotal = Math.round(subtotal * 100) / 100;
-  const shipping = subtotal > 50 || subtotal === 0 ? 0 : 4.99;
-  const tax = Math.round(subtotal * 0.08 * 100) / 100;
-  const total = Math.round((subtotal + shipping + tax) * 100) / 100;
+  subtotal = Math.round((subtotal + Number.EPSILON) * 100) / 100;
+  // Free delivery on orders over ₹299 (or empty)
+  const shipping = subtotal >= 299 || subtotal === 0 ? 0 : 49.0;
+
+  const taxResult = calculateOrderTax({
+    items: formattedItems,
+    customerState,
+    shippingFee: shipping,
+    discount: 0,
+  });
 
   return {
     items: formattedItems,
     itemCount,
     subtotal,
+    discount: 0,
+    taxableAmount: taxResult.taxableAmount,
+    taxBreakdown: taxResult.taxBreakdown,
+    tax: taxResult.tax,
     shipping,
-    tax,
-    total,
+    total: taxResult.grandTotal,
+    currency: "INR",
+    currencySymbol: "₹",
   };
 };
 

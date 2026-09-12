@@ -38,9 +38,23 @@ const addressSchema = new Schema(
       required: true,
       trim: true,
     },
+    pinCode: {
+      type: String,
+      trim: true,
+    },
+    district: {
+      type: String,
+      default: "",
+      trim: true,
+    },
+    landmark: {
+      type: String,
+      default: "",
+      trim: true,
+    },
     country: {
       type: String,
-      default: "US",
+      default: "IN",
       trim: true,
     },
     isDefault: {
@@ -52,6 +66,17 @@ const addressSchema = new Schema(
     timestamps: true,
   }
 );
+
+// Synchronize pinCode and postalCode
+addressSchema.pre("validate", function (next) {
+  if (this.pinCode && !this.postalCode) {
+    this.postalCode = this.pinCode;
+  }
+  if (this.postalCode && !this.pinCode) {
+    this.pinCode = this.postalCode;
+  }
+  next();
+});
 
 // If isDefault is set to true, unset any other default address for this user
 addressSchema.pre("save", async function (next) {

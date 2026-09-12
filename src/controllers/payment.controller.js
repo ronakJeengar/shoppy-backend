@@ -101,7 +101,7 @@ export const verifyPayment = asyncHandler(async (req, res) => {
           transactionId,
           status: "COMPLETED",
           amount: 149.99,
-          currency: "USD",
+          currency: "INR",
         },
         order: {
           status: "CONFIRMED",

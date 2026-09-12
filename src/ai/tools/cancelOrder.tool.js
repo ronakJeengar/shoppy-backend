@@ -157,7 +157,7 @@ export class CancelOrderTool extends AITool {
         orderId: order._id.toString(),
         orderNumber: order.orderNumber,
         totalAmount: order.totalAmount,
-        currency: order.currency || "USD",
+        currency: order.currency || "INR",
         status: order.status,
       };
     }
@@ -185,7 +185,7 @@ export class CancelOrderTool extends AITool {
         orderId: cachedOrder._id.toString(),
         orderNumber: cachedOrder.orderNumber,
         totalAmount: cachedOrder.totalAmount,
-        currency: cachedOrder.currency || "USD",
+        currency: cachedOrder.currency || "INR",
         status: cachedOrder.status,
       };
     }
@@ -195,8 +195,8 @@ export class CancelOrderTool extends AITool {
       return {
         orderId,
         orderNumber: "ORD-2026-X99",
-        totalAmount: 161.99,
-        currency: "USD",
+        totalAmount: 1499.0,
+        currency: "INR",
         status: "CONFIRMED",
       };
     }
@@ -253,8 +253,8 @@ export class CancelOrderTool extends AITool {
         status: "CANCELLED",
         refundStatus: "INITIATED",
         refundAmount: order.totalAmount,
-        currency: order.currency || "USD",
-        message: `Order #${order.orderNumber} has been successfully cancelled and a refund of $${order.totalAmount.toFixed(2)} has been initiated.`,
+        currency: order.currency || "INR",
+        message: `Order #${order.orderNumber} has been successfully cancelled and a refund of ₹${order.totalAmount.toFixed(2)} has been initiated.`,
       };
     }
 
@@ -284,8 +284,8 @@ export class CancelOrderTool extends AITool {
         status: "CANCELLED",
         refundStatus: "INITIATED",
         refundAmount: cachedOrder.totalAmount,
-        currency: cachedOrder.currency || "USD",
-        message: `Order #${cachedOrder.orderNumber} has been successfully cancelled and a refund of $${cachedOrder.totalAmount.toFixed(2)} has been initiated.`,
+        currency: cachedOrder.currency || "INR",
+        message: `Order #${cachedOrder.orderNumber} has been successfully cancelled and a refund of ₹${cachedOrder.totalAmount.toFixed(2)} has been initiated.`,
       };
     }
 
@@ -295,9 +295,9 @@ export class CancelOrderTool extends AITool {
       orderNumber: "ORD-2026-X99",
       status: "CANCELLED",
       refundStatus: "INITIATED",
-      refundAmount: 161.99,
-      currency: "USD",
-      message: `Order #ORD-2026-X99 has been successfully cancelled and a refund of $161.99 has been initiated.`,
+      refundAmount: 1499.0,
+      currency: "INR",
+      message: `Order #ORD-2026-X99 has been successfully cancelled and a refund of ₹1499.00 has been initiated.`,
     };
   }
 }

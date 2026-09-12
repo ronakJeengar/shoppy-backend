@@ -240,7 +240,7 @@ export class AiService {
               orderId: result.orderId,
               orderNumber: result.orderNumber,
               totalAmount: result.totalAmount,
-              currency: result.currency || "USD",
+              currency: result.currency || "INR",
               details: result.details || {},
             };
           }

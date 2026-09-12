@@ -10,6 +10,7 @@ import { Review } from "../../models/review.model.js";
 import { Notification } from "../../models/notification.model.js";
 import { Cart } from "../../models/cart.model.js";
 import { Wishlist } from "../../models/wishlist.model.js";
+import { calculateOrderTax } from "../../services/tax.service.js";
 
 dotenv.config();
 
@@ -19,10 +20,9 @@ export const seedDatabase = async () => {
     throw new Error("Cannot seed database in production environment!");
   }
 
-  console.log("🌱 Starting unified database seeding...");
+  console.log("🌱 Starting unified database seeding (Indian GST & INR)...");
 
   // 1. Clear existing non-user data & seeded dev users
-  // Note: Clears collections for a clean, deterministic development environment
   await Promise.all([
     Category.deleteMany({}),
     Product.deleteMany({}),
@@ -37,7 +37,7 @@ export const seedDatabase = async () => {
 
   console.log("🧹 Cleared all collections.");
 
-  // 2. Seed Categories (Categories required by Shoppy spec)
+  // 2. Seed Categories
   const categoryDocs = await Category.create([
     { name: "electronics" },
     { name: "furniture" },
@@ -55,15 +55,20 @@ export const seedDatabase = async () => {
   }
   console.log(`📦 Seeded ${categoryDocs.length} categories.`);
 
-  // 3. Seed Products (38 realistic e-commerce products with varied stock: In Stock, Low Stock, Out of Stock)
+  // 3. Seed Products (38 realistic e-commerce products with INR prices, MRPs, HSN codes, and GST rates)
   const productsData = [
-    // --- Electronics ---
+    // --- Electronics (18% GST) ---
     {
       productName: "Aura Pro Wireless Noise-Cancelling Headphones",
       sellerName: "Aura Audio Labs",
       description:
         "Premium over-ear studio headphones with hybrid active noise cancellation, custom 40mm titanium drivers, 35-hour battery life, and ultra-plush memory foam cushions.",
-      price: 249.99,
+      price: 14999.0,
+      mrp: 19999.0,
+      hsnCode: "8518",
+      gstRate: 18,
+      isTaxInclusive: true,
+      isCodEligible: true,
       stock: 55,
       productRating: 4.9,
       totalReviews: 128,
@@ -84,7 +89,12 @@ export const seedDatabase = async () => {
       sellerName: "Titan Wearables",
       description:
         "Sapphire crystal display smartwatch featuring dual-frequency GPS, ECG monitor, continuous body temperature tracking, 100m water resistance, and 7-day battery endurance.",
-      price: 299.0,
+      price: 17999.0,
+      mrp: 22999.0,
+      hsnCode: "8517",
+      gstRate: 18,
+      isTaxInclusive: true,
+      isCodEligible: true,
       stock: 42,
       productRating: 4.8,
       totalReviews: 94,
@@ -105,7 +115,12 @@ export const seedDatabase = async () => {
       sellerName: "Lumix Sound",
       description:
         "IP67 dustproof and waterproof cylindrical speaker delivering 360-degree immersive acoustic sound, punchy bass radiators, and built-in power bank functionality.",
-      price: 89.95,
+      price: 4999.0,
+      mrp: 6999.0,
+      hsnCode: "8518",
+      gstRate: 18,
+      isTaxInclusive: true,
+      isCodEligible: true,
       stock: 4, // Low stock
       productRating: 4.7,
       totalReviews: 52,
@@ -123,7 +138,12 @@ export const seedDatabase = async () => {
       sellerName: "VisionTech Displays",
       description:
         "Ultra-slim bezel 27-inch IPS display with 99% DCI-P3 color accuracy, HDR400 certified, 90W power delivery over USB-C, and ergonomic pivot stand.",
-      price: 389.0,
+      price: 28999.0,
+      mrp: 34999.0,
+      hsnCode: "8528",
+      gstRate: 18,
+      isTaxInclusive: true,
+      isCodEligible: false,
       stock: 0, // Out of stock
       productRating: 4.6,
       totalReviews: 38,
@@ -140,7 +160,12 @@ export const seedDatabase = async () => {
       sellerName: "PowerLink Labs",
       description:
         "Pocket-sized Qi2 magnetic wireless battery pack with kickstand, 20W PD fast-charging USB-C port, and LED battery display.",
-      price: 45.5,
+      price: 1899.0,
+      mrp: 2499.0,
+      hsnCode: "8507",
+      gstRate: 18,
+      isTaxInclusive: true,
+      isCodEligible: true,
       stock: 65,
       productRating: 4.7,
       totalReviews: 81,
@@ -150,13 +175,18 @@ export const seedDatabase = async () => {
       isActive: true,
     },
 
-    // --- Furniture ---
+    // --- Furniture (18% GST) ---
     {
       productName: "Ergonomic Mesh High-Back Executive Chair",
       sellerName: "Nordic Posture",
       description:
         "Breathable elastomeric mesh task chair with 4D adjustable armrests, adaptive lumbar support, smooth synchronous tilt, and aluminum base.",
-      price: 229.0,
+      price: 12999.0,
+      mrp: 16999.0,
+      hsnCode: "9403",
+      gstRate: 18,
+      isTaxInclusive: true,
+      isCodEligible: false,
       stock: 15,
       productRating: 4.8,
       totalReviews: 62,
@@ -170,7 +200,12 @@ export const seedDatabase = async () => {
       sellerName: "Hygge Living",
       description:
         "Organic surfboard silhouette coffee table crafted from sustainably sourced American walnut with beveled edges and tapered splayed legs.",
-      price: 189.5,
+      price: 8999.0,
+      mrp: 11999.0,
+      hsnCode: "9403",
+      gstRate: 18,
+      isTaxInclusive: true,
+      isCodEligible: false,
       stock: 8, // Low stock
       productRating: 4.7,
       totalReviews: 29,
@@ -184,7 +219,12 @@ export const seedDatabase = async () => {
       sellerName: "Hygge Living",
       description:
         "Set of 3 heavy-duty concealed-bracket floating shelves in natural blonde birch. Ideal for books, plants, and accent decor.",
-      price: 54.0,
+      price: 1499.0,
+      mrp: 2499.0,
+      hsnCode: "9403",
+      gstRate: 18,
+      isTaxInclusive: true,
+      isCodEligible: true,
       stock: 0, // Out of stock
       productRating: 4.5,
       totalReviews: 19,
@@ -198,7 +238,12 @@ export const seedDatabase = async () => {
       sellerName: "Nordic Posture",
       description:
         "Compact bed-side companion with soft-close dovetailed drawer, open lower shelf for books, and integrated cable pass-through.",
-      price: 119.0,
+      price: 6499.0,
+      mrp: 8999.0,
+      hsnCode: "9403",
+      gstRate: 18,
+      isTaxInclusive: true,
+      isCodEligible: true,
       stock: 22,
       productRating: 4.6,
       totalReviews: 34,
@@ -212,7 +257,12 @@ export const seedDatabase = async () => {
       sellerName: "Nordic Posture",
       description:
         "Pneumatic gas-spring riser transforming any tabletop into a sit-stand workstation. Eco-friendly bamboo surface with dual monitor capacity.",
-      price: 149.99,
+      price: 7999.0,
+      mrp: 10999.0,
+      hsnCode: "9403",
+      gstRate: 18,
+      isTaxInclusive: true,
+      isCodEligible: true,
       stock: 3, // Low stock
       productRating: 4.9,
       totalReviews: 45,
@@ -222,13 +272,18 @@ export const seedDatabase = async () => {
       isActive: true,
     },
 
-    // --- Fashion ---
+    // --- Fashion (5% & 12% GST) ---
     {
       productName: "Heavyweight Organic Pima Cotton Oversized Tee",
       sellerName: "Maison Minimal",
       description:
         "280 GSM long-staple Peruvian Pima cotton heavyweight T-shirt with drop-shoulder tailoring, ribbed crew neck, and pre-shrunk finish.",
-      price: 38.0,
+      price: 999.0,
+      mrp: 1499.0,
+      hsnCode: "6109",
+      gstRate: 5,
+      isTaxInclusive: true,
+      isCodEligible: true,
       stock: 85,
       productRating: 4.8,
       totalReviews: 112,
@@ -246,7 +301,12 @@ export const seedDatabase = async () => {
       sellerName: "Atelier Vachetta",
       description:
         "Vegetable-tanned Tuscan leather bifold card holder with RFID-blocking shielding, hand-burnished edges, and 8 card slots.",
-      price: 59.0,
+      price: 1499.0,
+      mrp: 2499.0,
+      hsnCode: "4202",
+      gstRate: 18,
+      isTaxInclusive: true,
+      isCodEligible: true,
       stock: 60,
       productRating: 4.9,
       totalReviews: 88,
@@ -260,7 +320,12 @@ export const seedDatabase = async () => {
       sellerName: "Maison Minimal",
       description:
         "13.5 oz Japanese Kurabo mill raw selvedge denim. Button-fly closure with custom antique copper hardware and chain-stitched hems.",
-      price: 115.0,
+      price: 2999.0,
+      mrp: 4499.0,
+      hsnCode: "6203",
+      gstRate: 12,
+      isTaxInclusive: true,
+      isCodEligible: true,
       stock: 24,
       productRating: 4.6,
       totalReviews: 57,
@@ -274,7 +339,12 @@ export const seedDatabase = async () => {
       sellerName: "Maison Minimal",
       description:
         "100% extrafine Australian Merino wool ribbed cuff beanie. Temperature-regulating, itch-free, and naturally odor resistant.",
-      price: 32.0,
+      price: 799.0,
+      mrp: 1299.0,
+      hsnCode: "6505",
+      gstRate: 5,
+      isTaxInclusive: true,
+      isCodEligible: true,
       stock: 0, // Out of stock
       productRating: 4.7,
       totalReviews: 41,
@@ -288,7 +358,12 @@ export const seedDatabase = async () => {
       sellerName: "Maison Minimal",
       description:
         "Ultra-lightweight packable storm jacket featuring DWR finish, YKK AquaGuard zippers, vented back yoke, and reflective accents.",
-      price: 88.0,
+      price: 2499.0,
+      mrp: 3999.0,
+      hsnCode: "6201",
+      gstRate: 12,
+      isTaxInclusive: true,
+      isCodEligible: true,
       stock: 5, // Low stock
       productRating: 4.5,
       totalReviews: 36,
@@ -298,13 +373,18 @@ export const seedDatabase = async () => {
       isActive: true,
     },
 
-    // --- Home & Kitchen ---
+    // --- Home & Kitchen (12% & 18% GST) ---
     {
       productName: "Handcrafted Ceramic Pour-Over Coffee Set",
       sellerName: "Kōhī Craft",
       description:
         "Minimalist matte stoneware coffee dripper with spiral extraction channels, ergonomic heat-resistant carafe, and reusable double-layer stainless mesh filter.",
-      price: 49.99,
+      price: 1499.0,
+      mrp: 2199.0,
+      hsnCode: "6911",
+      gstRate: 12,
+      isTaxInclusive: true,
+      isCodEligible: true,
       stock: 40,
       productRating: 4.9,
       totalReviews: 67,
@@ -318,7 +398,12 @@ export const seedDatabase = async () => {
       sellerName: "Hygge Living",
       description:
         "16-piece handcrafted stoneware dining collection with subtle speckled glaze. Microwave, oven, and dishwasher safe.",
-      price: 135.0,
+      price: 4999.0,
+      mrp: 6999.0,
+      hsnCode: "6911",
+      gstRate: 12,
+      isTaxInclusive: true,
+      isCodEligible: true,
       stock: 30,
       productRating: 4.8,
       totalReviews: 41,
@@ -332,7 +417,12 @@ export const seedDatabase = async () => {
       sellerName: "Zenith Home",
       description:
         "BPA-free real bamboo casing diffuser with whisper-quiet ultrasonic atomization, warm ambient LED glow, and automatic waterless shut-off.",
-      price: 36.99,
+      price: 1299.0,
+      mrp: 1999.0,
+      hsnCode: "8509",
+      gstRate: 18,
+      isTaxInclusive: true,
+      isCodEligible: true,
       stock: 75,
       productRating: 4.7,
       totalReviews: 92,
@@ -346,7 +436,12 @@ export const seedDatabase = async () => {
       sellerName: "Kōhī Craft",
       description:
         "67-layer VG-10 high-carbon Damascus steel blade with octagonal pakkawood handle, razor-sharp 15-degree edge, and wooden saya sheath.",
-      price: 85.0,
+      price: 3499.0,
+      mrp: 4999.0,
+      hsnCode: "8211",
+      gstRate: 12,
+      isTaxInclusive: true,
+      isCodEligible: true,
       stock: 18,
       productRating: 4.9,
       totalReviews: 78,
@@ -360,7 +455,12 @@ export const seedDatabase = async () => {
       sellerName: "Hygge Living",
       description:
         "Heavy-duty heirloom cast iron pan triple seasoned with organic flaxseed oil. Superior heat retention with dual pour spouts.",
-      price: 39.95,
+      price: 1699.0,
+      mrp: 2499.0,
+      hsnCode: "7323",
+      gstRate: 12,
+      isTaxInclusive: true,
+      isCodEligible: true,
       stock: 2, // Low stock
       productRating: 4.8,
       totalReviews: 104,
@@ -370,13 +470,18 @@ export const seedDatabase = async () => {
       isActive: true,
     },
 
-    // --- Beauty ---
+    // --- Beauty (18% & 28% Luxury GST) ---
     {
       productName: "Organic Botanical Vitamin C Facial Serum",
       sellerName: "Lumière Botanicals",
       description:
         "Potent antioxidant blend of cold-pressed rosehip seed oil, kakadu plum vitamin C, and plant-derived hyaluronic acid for radiant and hydrated skin.",
-      price: 48.0,
+      price: 1199.0,
+      mrp: 1699.0,
+      hsnCode: "3304",
+      gstRate: 18,
+      isTaxInclusive: true,
+      isCodEligible: true,
       stock: 70,
       productRating: 4.9,
       totalReviews: 106,
@@ -390,7 +495,12 @@ export const seedDatabase = async () => {
       sellerName: "Zenith Home",
       description:
         "Handcrafted 100% natural Xiuyan jade crystal tool kit designed to promote lymphatic drainage, facial muscle relaxation, and serum absorption.",
-      price: 24.5,
+      price: 699.0,
+      mrp: 1199.0,
+      hsnCode: "3304",
+      gstRate: 18,
+      isTaxInclusive: true,
+      isCodEligible: true,
       stock: 80,
       productRating: 4.7,
       totalReviews: 61,
@@ -404,7 +514,12 @@ export const seedDatabase = async () => {
       sellerName: "Lumière Botanicals",
       description:
         "Lightweight gel-cream infused with 5 multi-weight peptides, ceramides, and centella asiatica to strengthen skin moisture barrier.",
-      price: 34.0,
+      price: 899.0,
+      mrp: 1399.0,
+      hsnCode: "3304",
+      gstRate: 18,
+      isTaxInclusive: true,
+      isCodEligible: true,
       stock: 0, // Out of stock
       productRating: 4.8,
       totalReviews: 53,
@@ -418,7 +533,12 @@ export const seedDatabase = async () => {
       sellerName: "Lumière Botanicals",
       description:
         "Non-nano zinc oxide reef-safe sun cream. Invisible matte finish without white cast, enriched with soothing green tea extract.",
-      price: 28.0,
+      price: 749.0,
+      mrp: 999.0,
+      hsnCode: "3304",
+      gstRate: 18,
+      isTaxInclusive: true,
+      isCodEligible: true,
       stock: 4, // Low stock
       productRating: 4.6,
       totalReviews: 89,
@@ -431,8 +551,13 @@ export const seedDatabase = async () => {
       productName: "Lavender & Sea Salt Exfoliating Body Scrub",
       sellerName: "Zenith Home",
       description:
-        "Gentle whipped body polish blending Pacific sea salt with sweet almond oil and Bulgarian lavender essential oil.",
-      price: 22.0,
+        "Gentle whipped luxury body polish blending Pacific sea salt with sweet almond oil and Bulgarian lavender essential oil.",
+      price: 649.0,
+      mrp: 999.0,
+      hsnCode: "3307",
+      gstRate: 28, // 28% Luxury personal care slab
+      isTaxInclusive: true,
+      isCodEligible: true,
       stock: 52,
       productRating: 4.7,
       totalReviews: 44,
@@ -442,13 +567,18 @@ export const seedDatabase = async () => {
       isActive: true,
     },
 
-    // --- Sports ---
+    // --- Sports (12% & 18% GST) ---
     {
       productName: "Thermal Insulated Stainless Water Bottle 1L",
       sellerName: "Summit Outdoors",
       description:
         "Double-walled vacuum insulated flask keeping ice cold for 28 hours or piping hot for 14 hours. Textured powder-coat grip and leak-proof spout lid.",
-      price: 29.99,
+      price: 999.0,
+      mrp: 1499.0,
+      hsnCode: "7323",
+      gstRate: 12,
+      isTaxInclusive: true,
+      isCodEligible: true,
       stock: 110,
       productRating: 4.9,
       totalReviews: 180,
@@ -462,7 +592,12 @@ export const seedDatabase = async () => {
       sellerName: "Zenith Home",
       description:
         "6mm thick non-slip textured exercise mat with laser-engraved body alignment markers, carrying strap, and biodegradable closed-cell construction.",
-      price: 42.0,
+      price: 1299.0,
+      mrp: 1899.0,
+      hsnCode: "9506",
+      gstRate: 12,
+      isTaxInclusive: true,
+      isCodEligible: true,
       stock: 35,
       productRating: 4.7,
       totalReviews: 73,
@@ -476,7 +611,12 @@ export const seedDatabase = async () => {
       sellerName: "Summit Outdoors",
       description:
         "Heavy-duty rubber-encased hex dumbbells with knurled ergonomic chrome handles. Anti-roll design protects workout floors.",
-      price: 58.0,
+      price: 2199.0,
+      mrp: 2999.0,
+      hsnCode: "9506",
+      gstRate: 18,
+      isTaxInclusive: true,
+      isCodEligible: false,
       stock: 0, // Out of stock
       productRating: 4.8,
       totalReviews: 39,
@@ -490,7 +630,12 @@ export const seedDatabase = async () => {
       sellerName: "Summit Outdoors",
       description:
         "100% natural Malaysian latex strength loops ranging from X-Light (5lb) to X-Heavy (40lb). Includes breathable mesh storage pouch.",
-      price: 18.99,
+      price: 499.0,
+      mrp: 799.0,
+      hsnCode: "9506",
+      gstRate: 12,
+      isTaxInclusive: true,
+      isCodEligible: true,
       stock: 95,
       productRating: 4.6,
       totalReviews: 115,
@@ -504,7 +649,12 @@ export const seedDatabase = async () => {
       sellerName: "Summit Outdoors",
       description:
         "Super-absorbent, ultra-lightweight antimicrobial microfiber fitness towel with zip key pocket and hanging loop.",
-      price: 14.5,
+      price: 399.0,
+      mrp: 599.0,
+      hsnCode: "6302",
+      gstRate: 12,
+      isTaxInclusive: true,
+      isCodEligible: true,
       stock: 5, // Low stock
       productRating: 4.5,
       totalReviews: 62,
@@ -514,13 +664,18 @@ export const seedDatabase = async () => {
       isActive: true,
     },
 
-    // --- Accessories ---
+    // --- Accessories (18% GST) ---
     {
       productName: "Polarized Acetate Classic Sunglasses",
       sellerName: "Atelier Vachetta",
       description:
         "Handcrafted Italian Mazzucchelli acetate frames with Category 3 polarized UV400 lenses and reinforced 5-barrel barrel hinges.",
-      price: 79.0,
+      price: 2499.0,
+      mrp: 3999.0,
+      hsnCode: "9004",
+      gstRate: 18,
+      isTaxInclusive: true,
+      isCodEligible: true,
       stock: 44,
       productRating: 4.8,
       totalReviews: 77,
@@ -534,7 +689,12 @@ export const seedDatabase = async () => {
       sellerName: "Atelier Vachetta",
       description:
         "Padded 1680D Cordura ballistic nylon protective case with magnetic closure, fleece lining, and quick-stash charging cable pocket.",
-      price: 36.0,
+      price: 999.0,
+      mrp: 1499.0,
+      hsnCode: "4202",
+      gstRate: 18,
+      isTaxInclusive: true,
+      isCodEligible: true,
       stock: 38,
       productRating: 4.7,
       totalReviews: 49,
@@ -548,7 +708,12 @@ export const seedDatabase = async () => {
       sellerName: "Modern Scribe",
       description:
         "CNC-milled Grade 5 titanium spring gate carabiner with integrated bottle opener, pry bar, and stainless key split rings.",
-      price: 24.0,
+      price: 799.0,
+      mrp: 1299.0,
+      hsnCode: "7326",
+      gstRate: 18,
+      isTaxInclusive: true,
+      isCodEligible: true,
       stock: 3, // Low stock
       productRating: 4.9,
       totalReviews: 82,
@@ -562,7 +727,12 @@ export const seedDatabase = async () => {
       sellerName: "Atelier Vachetta",
       description:
         "Double-wrap genuine calfskin leather wristband with brushed matte black surgical steel magnetic clasp.",
-      price: 28.5,
+      price: 699.0,
+      mrp: 1099.0,
+      hsnCode: "7117",
+      gstRate: 18,
+      isTaxInclusive: true,
+      isCodEligible: true,
       stock: 0, // Out of stock
       productRating: 4.4,
       totalReviews: 26,
@@ -576,7 +746,12 @@ export const seedDatabase = async () => {
       sellerName: "Atelier Vachetta",
       description:
         "Cushioned 3-slot watch storage case in supple midnight navy suede with snap closure and removable pillows.",
-      price: 45.0,
+      price: 1499.0,
+      mrp: 2199.0,
+      hsnCode: "4202",
+      gstRate: 18,
+      isTaxInclusive: true,
+      isCodEligible: true,
       stock: 26,
       productRating: 4.8,
       totalReviews: 31,
@@ -586,13 +761,18 @@ export const seedDatabase = async () => {
       isActive: true,
     },
 
-    // --- Books & Stationery ---
+    // --- Books & Stationery (0% GST Books, 12% & 18% Stationery) ---
     {
       productName: "Vintage Hardcover Dotted Grid Journal 160gsm",
       sellerName: "Modern Scribe",
       description:
         "Bleed-resistant 160 GSM bamboo paper notebook with Smyth-sewn lay-flat binding, dual silk ribbon bookmarks, and expandable rear pocket.",
-      price: 22.5,
+      price: 499.0,
+      mrp: 799.0,
+      hsnCode: "4901",
+      gstRate: 0, // 0% GST on printed books/journals
+      isTaxInclusive: true,
+      isCodEligible: true,
       stock: 65,
       productRating: 4.9,
       totalReviews: 83,
@@ -606,7 +786,12 @@ export const seedDatabase = async () => {
       sellerName: "Modern Scribe",
       description:
         "Solid machined raw brass body with balanced hexagonal barrel, smooth German ceramic rollerball refill, and vintage patina evolution over time.",
-      price: 34.0,
+      price: 899.0,
+      mrp: 1299.0,
+      hsnCode: "9608",
+      gstRate: 18,
+      isTaxInclusive: true,
+      isCodEligible: true,
       stock: 48,
       productRating: 4.8,
       totalReviews: 44,
@@ -620,7 +805,12 @@ export const seedDatabase = async () => {
       sellerName: "Modern Scribe",
       description:
         "Handcrafted walnut wood desktop tier tray for letters, journals, and tablets with non-slip cork feet.",
-      price: 39.0,
+      price: 1199.0,
+      mrp: 1699.0,
+      hsnCode: "4421",
+      gstRate: 12,
+      isTaxInclusive: true,
+      isCodEligible: true,
       stock: 20,
       productRating: 4.6,
       totalReviews: 28,
@@ -640,7 +830,7 @@ export const seedDatabase = async () => {
     username: "alex_rivera",
     email: "customer@shoppy.com",
     fullName: "Alex Rivera",
-    phone: "+1 (555) 234-5678",
+    phone: "+91 98765 43210",
     password: "Customer@12345",
     role: "CUSTOMER",
     isActive: true,
@@ -652,7 +842,7 @@ export const seedDatabase = async () => {
     username: "admin",
     email: "admin@shoppy.com",
     fullName: "Shoppy Admin",
-    phone: "+1 (555) 999-0000",
+    phone: "+91 98765 00000",
     password: "Admin@12345",
     role: "ADMIN",
     isActive: true,
@@ -663,7 +853,7 @@ export const seedDatabase = async () => {
     username: "taylor",
     email: "demo@shoppy.com",
     fullName: "Taylor Swift",
-    phone: "+1 (555) 456-7890",
+    phone: "+91 98765 11111",
     password: "Demo@12345",
     role: "CUSTOMER",
     isActive: true,
@@ -671,136 +861,174 @@ export const seedDatabase = async () => {
 
   console.log(`👤 Seeded 3 dev users (customer, admin, demo).`);
 
-  // 5. Seed Addresses for Customer
+  // 5. Seed Indian Addresses for Customer
   const primaryAddress = await Address.create({
     user: customerUser._id,
     fullName: customerUser.fullName,
     phone: customerUser.phone,
-    streetAddress: "742 Evergreen Terrace",
-    city: "Springfield",
-    state: "OR",
-    postalCode: "97477",
-    country: "US",
+    streetAddress: "Flat 402, Lotus Residency, 100ft Road, Indiranagar",
+    landmark: "Near Metro Station Pillar 42",
+    district: "Bengaluru Urban",
+    city: "Bengaluru",
+    state: "KARNATAKA",
+    pinCode: "560038",
+    postalCode: "560038",
+    country: "IN",
     isDefault: true,
   });
 
   const secondaryAddress = await Address.create({
     user: customerUser._id,
     fullName: customerUser.fullName,
-    phone: "+1 (555) 345-6789",
-    streetAddress: "100 Market St, Suite 400",
-    city: "San Francisco",
-    state: "CA",
-    postalCode: "94105",
-    country: "US",
+    phone: customerUser.phone,
+    streetAddress: "Flat 801, DLF Phase 2, Cyber City",
+    landmark: "Opposite Cyber Hub",
+    district: "Gurugram",
+    city: "Gurugram",
+    state: "HARYANA",
+    pinCode: "122002",
+    postalCode: "122002",
+    country: "IN",
     isDefault: false,
   });
 
-  console.log(`🏠 Seeded 2 addresses.`);
+  console.log(`🏠 Seeded 2 Indian addresses.`);
 
-  // 6. Seed Orders for Customer
+  // 6. Seed Orders for Customer with authoritative GST calculation
   const headphoneProduct = productDocs[0];
   const watchProduct = productDocs[1];
   const teeProduct = productDocs[10]; // Pima cotton tee
 
-  // Order 1: Delivered
+  // Order 1: Intra-state (Karnataka -> Karnataka) - Delivered
+  const order1Items = [
+    {
+      productId: headphoneProduct._id,
+      productName: headphoneProduct.productName,
+      productImage: headphoneProduct.productImage,
+      sellerName: headphoneProduct.sellerName,
+      unitPrice: headphoneProduct.price,
+      quantity: 1,
+      lineTotal: headphoneProduct.price,
+      hsnCode: headphoneProduct.hsnCode || "8518",
+      gstRate: headphoneProduct.gstRate || 18,
+      isTaxInclusive: true,
+    },
+    {
+      productId: teeProduct._id,
+      productName: teeProduct.productName,
+      productImage: teeProduct.productImage,
+      sellerName: teeProduct.sellerName,
+      unitPrice: teeProduct.price,
+      quantity: 2,
+      lineTotal: teeProduct.price * 2,
+      hsnCode: teeProduct.hsnCode || "6109",
+      gstRate: teeProduct.gstRate || 5,
+      isTaxInclusive: true,
+    },
+  ];
+
+  const order1Tax = calculateOrderTax({
+    items: order1Items,
+    customerState: primaryAddress.state,
+    originState: "KARNATAKA",
+    shippingFee: 0,
+  });
+
   const order1 = await Order.create({
     orderNumber: "SHP-2026-0001",
     customer: customerUser._id,
-    orderItems: [
-      {
-        productId: headphoneProduct._id,
-        productName: headphoneProduct.productName,
-        productImage: headphoneProduct.productImage,
-        sellerName: headphoneProduct.sellerName,
-        unitPrice: headphoneProduct.price,
-        quantity: 1,
-        lineTotal: headphoneProduct.price,
-      },
-      {
-        productId: teeProduct._id,
-        productName: teeProduct.productName,
-        productImage: teeProduct.productImage,
-        sellerName: teeProduct.sellerName,
-        unitPrice: teeProduct.price,
-        quantity: 2,
-        lineTotal: teeProduct.price * 2,
-      },
-    ],
+    orderItems: order1Items,
     shippingAddress: {
       fullName: primaryAddress.fullName,
       phone: primaryAddress.phone,
       streetAddress: primaryAddress.streetAddress,
+      landmark: primaryAddress.landmark,
+      district: primaryAddress.district,
       city: primaryAddress.city,
       state: primaryAddress.state,
+      pinCode: primaryAddress.pinCode,
       postalCode: primaryAddress.postalCode,
       country: primaryAddress.country,
     },
     shippingMethod: "STANDARD",
-    subtotal: headphoneProduct.price + teeProduct.price * 2,
-    shippingFee: 0,
-    tax: Math.round((headphoneProduct.price + teeProduct.price * 2) * 0.08 * 100) / 100,
-    totalAmount:
-      Math.round(
-        (headphoneProduct.price +
-          teeProduct.price * 2 +
-          (headphoneProduct.price + teeProduct.price * 2) * 0.08) *
-          100
-      ) / 100,
+    subtotal: order1Tax.subtotal,
+    shippingFee: order1Tax.shippingFee,
+    taxableAmount: order1Tax.taxableAmount,
+    taxBreakdown: order1Tax.taxBreakdown,
+    tax: order1Tax.tax,
+    totalAmount: order1Tax.grandTotal,
+    currency: "INR",
     status: "DELIVERED",
-    carrier: "FedEx Express",
-    trackingNumber: "FX-928172918US",
+    carrier: "Blue Dart Express",
+    trackingNumber: "BD-928172918IN",
     statusHistory: [
       { status: "CONFIRMED", timestamp: new Date(Date.now() - 5 * 86400000), note: "Order placed & payment verified" },
-      { status: "PROCESSING", timestamp: new Date(Date.now() - 4 * 86400000), note: "Packed in fulfilment center" },
-      { status: "SHIPPED", timestamp: new Date(Date.now() - 3 * 86400000), note: "Dispatched with FedEx" },
-      { status: "DELIVERED", timestamp: new Date(Date.now() - 1 * 86400000), note: "Delivered to recipient porch" },
+      { status: "PROCESSING", timestamp: new Date(Date.now() - 4 * 86400000), note: "Packed at Bengaluru fulfilment hub" },
+      { status: "SHIPPED", timestamp: new Date(Date.now() - 3 * 86400000), note: "Dispatched via Blue Dart Express" },
+      { status: "DELIVERED", timestamp: new Date(Date.now() - 1 * 86400000), note: "Delivered to security gate" },
     ],
   });
 
-  // Order 2: In transit
+  // Order 2: Inter-state (Karnataka -> Haryana) - In transit
+  const order2Items = [
+    {
+      productId: watchProduct._id,
+      productName: watchProduct.productName,
+      productImage: watchProduct.productImage,
+      sellerName: watchProduct.sellerName,
+      unitPrice: watchProduct.price,
+      quantity: 1,
+      lineTotal: watchProduct.price,
+      hsnCode: watchProduct.hsnCode || "8517",
+      gstRate: watchProduct.gstRate || 18,
+      isTaxInclusive: true,
+    },
+  ];
+
+  const order2Tax = calculateOrderTax({
+    items: order2Items,
+    customerState: secondaryAddress.state, // HARYANA -> Inter-state IGST
+    originState: "KARNATAKA",
+    shippingFee: 99.0,
+  });
+
   const order2 = await Order.create({
     orderNumber: "SHP-2026-0002",
     customer: customerUser._id,
-    orderItems: [
-      {
-        productId: watchProduct._id,
-        productName: watchProduct.productName,
-        productImage: watchProduct.productImage,
-        sellerName: watchProduct.sellerName,
-        unitPrice: watchProduct.price,
-        quantity: 1,
-        lineTotal: watchProduct.price,
-      },
-    ],
+    orderItems: order2Items,
     shippingAddress: {
-      fullName: primaryAddress.fullName,
-      phone: primaryAddress.phone,
-      streetAddress: primaryAddress.streetAddress,
-      city: primaryAddress.city,
-      state: primaryAddress.state,
-      postalCode: primaryAddress.postalCode,
-      country: primaryAddress.country,
+      fullName: secondaryAddress.fullName,
+      phone: secondaryAddress.phone,
+      streetAddress: secondaryAddress.streetAddress,
+      landmark: secondaryAddress.landmark,
+      district: secondaryAddress.district,
+      city: secondaryAddress.city,
+      state: secondaryAddress.state,
+      pinCode: secondaryAddress.pinCode,
+      postalCode: secondaryAddress.postalCode,
+      country: secondaryAddress.country,
     },
     shippingMethod: "EXPRESS",
-    subtotal: watchProduct.price,
-    shippingFee: 15.0,
-    tax: Math.round(watchProduct.price * 0.08 * 100) / 100,
-    totalAmount:
-      Math.round((watchProduct.price + 15.0 + watchProduct.price * 0.08) * 100) / 100,
+    subtotal: order2Tax.subtotal,
+    shippingFee: order2Tax.shippingFee,
+    taxableAmount: order2Tax.taxableAmount,
+    taxBreakdown: order2Tax.taxBreakdown,
+    tax: order2Tax.tax,
+    totalAmount: order2Tax.grandTotal,
+    currency: "INR",
     status: "SHIPPED",
-    carrier: "UPS Next Day",
-    trackingNumber: "1Z999AA10123456784",
+    carrier: "Delhivery Surface",
+    trackingNumber: "DEL-887123456IN",
     statusHistory: [
       { status: "CONFIRMED", timestamp: new Date(Date.now() - 2 * 86400000), note: "Payment captured" },
-      { status: "PROCESSING", timestamp: new Date(Date.now() - 1 * 86400000), note: "Handed over to carrier" },
-      { status: "SHIPPED", timestamp: new Date(), note: "In transit to delivery hub" },
+      { status: "PROCESSING", timestamp: new Date(Date.now() - 1 * 86400000), note: "Handed over to Delhivery logistics" },
+      { status: "SHIPPED", timestamp: new Date(), note: "In transit to Delhi-NCR delivery hub" },
     ],
   });
 
-  console.log(`📦 Seeded 2 sample orders.`);
+  console.log(`📦 Seeded 2 sample GST orders (Intra-state CGST/SGST & Inter-state IGST).`);
 
-  // 7. Seed Reviews (Valid verified reviews linked to valid products, users & orders)
+  // 7. Seed Reviews
   await Review.create([
     {
       user: customerUser._id,
@@ -842,7 +1070,7 @@ export const seedDatabase = async () => {
       rating: 4,
       title: "Great sound for outdoor trips",
       comment:
-        "Remarkably loud for its portable size! Waterproof build came in handy during beach trips. Very satisfied.",
+        "Remarkably loud for its portable size! Waterproof build came in handy during trips. Very satisfied.",
       status: "PUBLISHED",
       verifiedPurchase: true,
     },
@@ -867,7 +1095,7 @@ export const seedDatabase = async () => {
       user: customerUser._id,
       type: "ORDER_DELIVERED",
       title: "Package Delivered!",
-      body: "Your order #SHP-2026-0001 has been safely delivered to your front porch.",
+      body: "Your order #SHP-2026-0001 has been safely delivered via Blue Dart.",
       data: { orderNumber: "SHP-2026-0001" },
       isRead: false,
     },
@@ -875,15 +1103,15 @@ export const seedDatabase = async () => {
       user: customerUser._id,
       type: "ORDER_SHIPPED",
       title: "Order on the way 🚚",
-      body: "Order #SHP-2026-0002 has been dispatched via UPS. Tracking: 1Z999AA10123456784.",
+      body: "Order #SHP-2026-0002 has been dispatched via Delhivery. Tracking: DEL-887123456IN.",
       data: { orderNumber: "SHP-2026-0002" },
       isRead: false,
     },
     {
       user: customerUser._id,
       type: "PROMOTION",
-      title: "Exclusive 15% Welcome Discount 🎉",
-      body: "Use promo code SHOPELEVATE at checkout to save 15% on your next purchase.",
+      title: "Exclusive Welcome Offer 🎉",
+      body: "Shop authentic Indian e-commerce with all taxes included upfront.",
       isRead: true,
       readAt: new Date(Date.now() - 86400000),
     },

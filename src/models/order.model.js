@@ -44,7 +44,10 @@ const shippingAddressSnapshotSchema = new Schema(
     city: { type: String, required: true },
     state: { type: String, required: true },
     postalCode: { type: String, required: true },
-    country: { type: String, default: "US" },
+    pinCode: { type: String },
+    district: { type: String, default: "" },
+    landmark: { type: String, default: "" },
+    country: { type: String, default: "IN" },
   },
   { _id: false }
 );
@@ -103,6 +106,11 @@ const orderSchema = new Schema(
       required: true,
       min: 0,
     },
+    discount: {
+      type: Number,
+      min: 0,
+      default: 0,
+    },
     shippingFee: {
       type: Number,
       required: true,
@@ -115,6 +123,30 @@ const orderSchema = new Schema(
       min: 0,
       default: 0,
     },
+    taxBreakdown: {
+      taxableAmount: { type: Number, default: 0 },
+      cgst: { type: Number, default: 0 },
+      sgst: { type: Number, default: 0 },
+      igst: { type: Number, default: 0 },
+      totalTax: { type: Number, default: 0 },
+      isInterState: { type: Boolean, default: false },
+      originState: { type: String, default: "KARNATAKA" },
+      customerState: { type: String, default: "" },
+    },
+    customerGstin: {
+      type: String,
+      default: "",
+      trim: true,
+      validate: {
+        validator: function (v) {
+          if (!v) return true;
+          return /^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z]{1}[1-9A-Z]{1}Z[0-9A-Z]{1}$/.test(
+            v
+          );
+        },
+        message: "Invalid GSTIN format (must be 15-character valid Indian GSTIN)",
+      },
+    },
     totalAmount: {
       type: Number,
       required: true,
@@ -126,7 +158,7 @@ const orderSchema = new Schema(
     },
     currency: {
       type: String,
-      default: "USD",
+      default: "INR",
       uppercase: true,
     },
     status: {

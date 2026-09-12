@@ -62,9 +62,23 @@ export const getAddressById = asyncHandler(async (req, res) => {
 });
 
 export const createAddress = asyncHandler(async (req, res) => {
-  const { fullName, phone, streetAddress, city, state, postalCode, country, isDefault } =
-    req.body;
+  const {
+    fullName,
+    phone,
+    streetAddress,
+    city,
+    state,
+    postalCode: rawPostalCode,
+    pinCode: rawPinCode,
+    district,
+    landmark,
+    country,
+    isDefault,
+  } = req.body;
   const userId = req.user._id.toString();
+
+  const postalCode = (rawPinCode || rawPostalCode || "").trim();
+  const pinCode = postalCode;
 
   if (!fullName || !fullName.trim()) {
     throw new ApiError(400, "Full name is required");
@@ -81,8 +95,8 @@ export const createAddress = asyncHandler(async (req, res) => {
   if (!state || !state.trim()) {
     throw new ApiError(400, "State is required");
   }
-  if (!postalCode || !postalCode.trim()) {
-    throw new ApiError(400, "Postal code is required");
+  if (!postalCode) {
+    throw new ApiError(400, "Postal code or PIN code is required");
   }
 
   if (mongoose.connection.readyState === 1) {
@@ -96,8 +110,11 @@ export const createAddress = asyncHandler(async (req, res) => {
       streetAddress: streetAddress.trim(),
       city: city.trim(),
       state: state.trim(),
-      postalCode: postalCode.trim(),
-      country: (country || "US").trim(),
+      postalCode,
+      pinCode,
+      district: (district || "").trim(),
+      landmark: (landmark || "").trim(),
+      country: (country || "IN").trim(),
       isDefault: shouldBeDefault,
     });
 
@@ -122,8 +139,11 @@ export const createAddress = asyncHandler(async (req, res) => {
     streetAddress: streetAddress.trim(),
     city: city.trim(),
     state: state.trim(),
-    postalCode: postalCode.trim(),
-    country: (country || "US").trim(),
+    postalCode,
+    pinCode,
+    district: (district || "").trim(),
+    landmark: (landmark || "").trim(),
+    country: (country || "IN").trim(),
     isDefault: shouldBeDefault,
     createdAt: new Date(),
     updatedAt: new Date(),
@@ -140,8 +160,19 @@ export const createAddress = asyncHandler(async (req, res) => {
 export const updateAddress = asyncHandler(async (req, res) => {
   const { id } = req.params;
   const userId = req.user._id.toString();
-  const { fullName, phone, streetAddress, city, state, postalCode, country, isDefault } =
-    req.body;
+  const {
+    fullName,
+    phone,
+    streetAddress,
+    city,
+    state,
+    postalCode,
+    pinCode,
+    district,
+    landmark,
+    country,
+    isDefault,
+  } = req.body;
 
   if (!mongoose.Types.ObjectId.isValid(id) && !id.startsWith("addr_")) {
     throw new ApiError(400, "Invalid address ID format");
@@ -158,7 +189,13 @@ export const updateAddress = asyncHandler(async (req, res) => {
     if (streetAddress !== undefined) address.streetAddress = streetAddress.trim();
     if (city !== undefined) address.city = city.trim();
     if (state !== undefined) address.state = state.trim();
-    if (postalCode !== undefined) address.postalCode = postalCode.trim();
+    const effectiveCode = (pinCode || postalCode || "").trim();
+    if (effectiveCode) {
+      address.postalCode = effectiveCode;
+      address.pinCode = effectiveCode;
+    }
+    if (district !== undefined) address.district = district.trim();
+    if (landmark !== undefined) address.landmark = landmark.trim();
     if (country !== undefined) address.country = country.trim();
     if (isDefault !== undefined) address.isDefault = Boolean(isDefault);
 

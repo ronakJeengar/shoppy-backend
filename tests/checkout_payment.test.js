@@ -130,6 +130,13 @@ describe("Phase 06 Checkout & Payment Pipeline Tests", () => {
       assert.strictEqual(typeof standardBody.data.tax, "number");
       assert.strictEqual(typeof standardBody.data.grandTotal, "number");
       assert.strictEqual(standardBody.data.shippingMethod, "STANDARD");
+      assert.strictEqual(standardBody.data.currency, "INR");
+      assert.strictEqual(standardBody.data.currencySymbol, "₹");
+      assert.ok(standardBody.data.taxBreakdown);
+      assert.strictEqual(typeof standardBody.data.taxBreakdown.cgst, "number");
+      assert.strictEqual(typeof standardBody.data.taxBreakdown.sgst, "number");
+      assert.strictEqual(typeof standardBody.data.taxBreakdown.igst, "number");
+      assert.strictEqual(typeof standardBody.data.taxBreakdown.taxableAmount, "number");
 
       // Express shipping
       const expressRes = await fetch(
@@ -146,7 +153,7 @@ describe("Phase 06 Checkout & Payment Pipeline Tests", () => {
 
       assert.strictEqual(expressRes.status, 200);
       const expressBody = await expressRes.json();
-      assert.strictEqual(expressBody.data.shippingFee, 9.99);
+      assert.strictEqual(expressBody.data.shippingFee, 99.0);
     } finally {
       server.close();
     }
@@ -357,5 +364,88 @@ describe("Phase 06 Checkout & Payment Pipeline Tests", () => {
     } finally {
       server.close();
     }
+  });
+
+  test("GST Engine: authoritatively handles 0%, 5%, 12%, 18%, 28% slabs with intra-state split", async () => {
+    const { calculateOrderTax } = await import("../src/services/tax.service.js");
+
+    // Intra-state basket (Karnataka -> Karnataka)
+    const basket = [
+      { productId: "p0", unitPrice: 500, quantity: 1, gstRate: 0, isTaxInclusive: true },
+      { productId: "p5", unitPrice: 1050, quantity: 1, gstRate: 5, isTaxInclusive: true },
+      { productId: "p12", unitPrice: 1120, quantity: 1, gstRate: 12, isTaxInclusive: true },
+      { productId: "p18", unitPrice: 1180, quantity: 1, gstRate: 18, isTaxInclusive: true },
+      { productId: "p28", unitPrice: 1280, quantity: 1, gstRate: 28, isTaxInclusive: true },
+    ];
+
+    const result = calculateOrderTax({
+      items: basket,
+      customerState: "KARNATAKA",
+      originState: "KARNATAKA",
+      shippingFee: 0,
+    });
+
+    assert.strictEqual(result.currency, "INR");
+    assert.strictEqual(result.currencySymbol, "₹");
+    assert.strictEqual(result.taxBreakdown.isInterState, false);
+    assert.strictEqual(result.taxBreakdown.igst, 0);
+    assert.ok(result.taxBreakdown.cgst > 0);
+    assert.ok(result.taxBreakdown.sgst > 0);
+    // CGST + SGST must strictly equal totalTax
+    assert.strictEqual(
+      Math.round((result.taxBreakdown.cgst + result.taxBreakdown.sgst) * 100) / 100,
+      result.taxBreakdown.totalTax
+    );
+    // Subtotal matches sum of unit prices: 500 + 1050 + 1120 + 1180 + 1280 = 5130
+    assert.strictEqual(result.subtotal, 5130);
+    assert.strictEqual(result.grandTotal, 5130);
+  });
+
+  test("GST Engine: authoritatively handles inter-state transactions with 100% IGST", async () => {
+    const { calculateOrderTax } = await import("../src/services/tax.service.js");
+
+    // Inter-state (Karnataka -> Maharashtra)
+    const basket = [
+      { productId: "p18", unitPrice: 10000, quantity: 1, gstRate: 18, isTaxInclusive: true },
+    ];
+
+    const result = calculateOrderTax({
+      items: basket,
+      customerState: "MAHARASHTRA",
+      originState: "KARNATAKA",
+      shippingFee: 99.0,
+    });
+
+    assert.strictEqual(result.taxBreakdown.isInterState, true);
+    assert.strictEqual(result.taxBreakdown.cgst, 0);
+    assert.strictEqual(result.taxBreakdown.sgst, 0);
+    // 10000 inclusive 18% -> taxable: 8474.58, tax: 1525.42
+    assert.strictEqual(result.taxBreakdown.igst, 1525.42);
+    assert.strictEqual(result.taxBreakdown.totalTax, 1525.42);
+    assert.strictEqual(result.taxBreakdown.taxableAmount, 8474.58);
+    // Grand total: 10000 + 99 = 10099
+    assert.strictEqual(result.grandTotal, 10099.0);
+  });
+
+  test("GST Engine: handles tax-exclusive pricing correctly", async () => {
+    const { calculateOrderTax } = await import("../src/services/tax.service.js");
+
+    const basket = [
+      { productId: "p_ex", unitPrice: 2000, quantity: 2, gstRate: 18, isTaxInclusive: false },
+    ];
+
+    const result = calculateOrderTax({
+      items: basket,
+      customerState: "KARNATAKA",
+      originState: "KARNATAKA",
+      shippingFee: 0,
+    });
+
+    // 4000 taxable + 18% (720) = 4720
+    assert.strictEqual(result.taxableAmount, 4000);
+    assert.strictEqual(result.taxBreakdown.totalTax, 720);
+    assert.strictEqual(result.taxBreakdown.cgst, 360);
+    assert.strictEqual(result.taxBreakdown.sgst, 360);
+    assert.strictEqual(result.grandTotal, 4720);
   });
 });
