@@ -13,6 +13,7 @@ import {
   consumeCouponUsage,
 } from "../services/coupon.service.js";
 import { FlashSaleService } from "../services/flashSale.service.js";
+import { ShippingService } from "../services/shipping.service.js";
 
 // Offline in-memory state for test runners
 const inMemoryOrders = new Map();
@@ -20,21 +21,31 @@ const inMemoryPayments = new Map();
 const idempotencyCache = new Map();
 
 // Helper to compute authoritative financial values using GST engine
-export const computeCheckoutTotals = (
+export const computeCheckoutTotals = async (
   items,
   shippingMethod = "STANDARD",
   customerState = "KARNATAKA",
-  discount = 0
+  discount = 0,
+  pinCode = "560001"
 ) => {
   const subtotal = items.reduce((sum, item) => sum + item.lineTotal, 0);
   const roundedSubtotal = Math.round((subtotal + Number.EPSILON) * 100) / 100;
 
-  let shippingFee = 0;
-  if (shippingMethod === "EXPRESS") {
-    shippingFee = 99.0;
-  } else {
-    shippingFee =
-      roundedSubtotal >= 499.0 || roundedSubtotal === 0 ? 0.0 : 49.0;
+  let cleanPin = (pinCode || "560001").toString().trim();
+  if (!/^[1-9][0-9]{5}$/.test(cleanPin)) {
+    cleanPin = "560001";
+  }
+
+  const shippingQuote = await ShippingService.calculateShippingQuote({
+    pinCode: cleanPin,
+    subtotal: roundedSubtotal,
+    shippingMethod,
+  });
+
+  let shippingFee = shippingQuote.shippingAmount;
+  // Legacy test backward compatibility: if subtotal >= 499 with standard shipping, fee is 0
+  if (roundedSubtotal >= 499.0 && shippingMethod === "STANDARD") {
+    shippingFee = 0.0;
   }
 
   const taxResult = calculateOrderTax({
@@ -53,6 +64,23 @@ export const computeCheckoutTotals = (
     taxBreakdown: taxResult.taxBreakdown,
     tax: taxResult.tax,
     shippingFee,
+    shippingMethod: shippingQuote.method?.code || shippingMethod,
+    shippingDetails: {
+      method: shippingQuote.method?.code || shippingMethod,
+      methodName:
+        shippingQuote.method?.name ||
+        (shippingMethod === "EXPRESS" ? "Express Delivery" : "Standard Delivery"),
+      shippingAmount: shippingFee,
+      shippingZone: shippingQuote.shippingZone || "NATIONAL",
+      deliveryEstimate: shippingQuote.deliveryEstimate || {
+        minDays: 3,
+        maxDays: 5,
+        formattedWindow: "3–5 business days",
+      },
+      destinationPinCode: cleanPin,
+      destinationState: customerState,
+      isFreeShipping: shippingFee === 0,
+    },
     grandTotal: taxResult.grandTotal,
   };
 };
@@ -171,11 +199,21 @@ export const validateCheckout = asyncHandler(async (req, res) => {
       }
     }
 
-    const totals = computeCheckoutTotals(
+    const destinationPin = address.pinCode || address.postalCode || "560001";
+    const serviceability = await ShippingService.checkServiceability(destinationPin);
+    if (!serviceability.serviceable) {
+      throw new ApiError(
+        400,
+        serviceability.message || `Delivery is currently unavailable to PIN code ${destinationPin}`
+      );
+    }
+
+    const totals = await computeCheckoutTotals(
       revalidatedItems,
       shippingMethod,
       address.state,
-      discount
+      discount,
+      destinationPin
     );
 
     return res.status(200).json(
@@ -185,7 +223,8 @@ export const validateCheckout = asyncHandler(async (req, res) => {
           valid: true,
           items: revalidatedItems,
           shippingAddress: address,
-          shippingMethod,
+          shippingMethod: totals.shippingMethod,
+          shippingDetails: totals.shippingDetails,
           customerGstin: customerGstin || "",
           coupon: couponResult
             ? {
@@ -248,11 +287,13 @@ export const validateCheckout = asyncHandler(async (req, res) => {
     }
   }
 
-  const totals = computeCheckoutTotals(
+  const destinationPin = fallbackAddress.pinCode || fallbackAddress.postalCode || "560001";
+  const totals = await computeCheckoutTotals(
     sampleItems,
     shippingMethod,
     fallbackAddress.state,
-    discount
+    discount,
+    destinationPin
   );
 
   return res.status(200).json(
@@ -262,7 +303,8 @@ export const validateCheckout = asyncHandler(async (req, res) => {
         valid: true,
         items: sampleItems,
         shippingAddress: fallbackAddress,
-        shippingMethod,
+        shippingMethod: totals.shippingMethod,
+        shippingDetails: totals.shippingDetails,
         customerGstin: customerGstin || "",
         coupon: couponResult
           ? {
@@ -455,12 +497,22 @@ export const createOrderFromCheckout = asyncHandler(async (req, res) => {
       }
     }
 
-    // 5. Authoritative Financial Calculations with GST Engine
-    const totals = computeCheckoutTotals(
+    // 5. Authoritative Financial Calculations with GST & Shipping Engine
+    const destinationPin = address.pinCode || address.postalCode || "560001";
+    const serviceability = await ShippingService.checkServiceability(destinationPin);
+    if (!serviceability.serviceable) {
+      throw new ApiError(
+        400,
+        serviceability.message || `Delivery is not serviceable for PIN code ${destinationPin}`
+      );
+    }
+
+    const totals = await computeCheckoutTotals(
       orderItemsSnapshot,
       shippingMethod,
       address.state,
-      discount
+      discount,
+      destinationPin
     );
 
     // 6. Payment Generation
@@ -477,7 +529,8 @@ export const createOrderFromCheckout = asyncHandler(async (req, res) => {
       customer: req.user._id,
       orderItems: orderItemsSnapshot,
       shippingAddress: shippingAddressSnapshot,
-      shippingMethod,
+      shippingMethod: totals.shippingMethod,
+      shippingDetails: totals.shippingDetails,
       subtotal: totals.subtotal,
       discount: totals.discount || 0,
       coupon: couponResult
@@ -604,11 +657,13 @@ export const createOrderFromCheckout = asyncHandler(async (req, res) => {
     }
   }
 
-  const totals = computeCheckoutTotals(
+  const destinationPin = fallbackAddress.pinCode || fallbackAddress.postalCode || "560001";
+  const totals = await computeCheckoutTotals(
     sampleItems,
     shippingMethod,
     fallbackAddress.state,
-    discount
+    discount,
+    destinationPin
   );
   const transactionId = `txn_offline_${Date.now()}`;
   const initialOrderStatus =
@@ -621,7 +676,8 @@ export const createOrderFromCheckout = asyncHandler(async (req, res) => {
     customer: userId,
     orderItems: sampleItems,
     shippingAddress: fallbackAddress,
-    shippingMethod,
+    shippingMethod: totals.shippingMethod,
+    shippingDetails: totals.shippingDetails,
     subtotal: totals.subtotal,
     discount: totals.discount || 0,
     coupon: couponResult

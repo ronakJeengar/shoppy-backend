@@ -13,6 +13,8 @@ import { Wishlist } from "../../models/wishlist.model.js";
 import { Coupon } from "../../models/coupon.model.js";
 import { Campaign } from "../../models/campaign.model.js";
 import { FlashSale } from "../../models/flashSale.model.js";
+import { PostalCode } from "../../models/postalCode.model.js";
+import { fallbackPostalCodes } from "../../services/shipping.service.js";
 import { calculateOrderTax } from "../../services/tax.service.js";
 
 dotenv.config();
@@ -45,6 +47,7 @@ export const seedDatabase = async () => {
     Coupon.deleteMany({}),
     Campaign.deleteMany({}),
     FlashSale.deleteMany({}),
+    PostalCode.deleteMany({}),
   ]);
 
   console.log("🧹 Cleared all collections.");
@@ -1521,6 +1524,10 @@ export const seedDatabase = async () => {
 
   console.log(`⚡ Seeded ${flashSaleDocs.length} flash sales.`);
 
+  // 11. Seed Postal Codes / Indian Serviceability
+  const postalDocs = await PostalCode.create(fallbackPostalCodes);
+  console.log(`📦 Seeded ${postalDocs.length} postal codes for Indian shipping.`);
+
   return {
     categories: categoryDocs.length,
     products: productDocs.length,
@@ -1532,6 +1539,7 @@ export const seedDatabase = async () => {
     coupons: couponDocs.length,
     campaigns: campaignDocs.length,
     flashSales: flashSaleDocs.length,
+    postalCodes: postalDocs.length,
   };
 };
 

@@ -58,6 +58,11 @@ import {
   toggleAdminFlashSaleStatus,
   deleteAdminFlashSale,
 } from "../controllers/flashSale.controller.js";
+import {
+  getAdminPostalCodes,
+  upsertAdminPostalCode,
+  deleteAdminPostalCode,
+} from "../controllers/shipping.controller.js";
 
 
 const router = Router();
@@ -135,6 +140,11 @@ router.get("/flash-sales/:id", getAdminFlashSaleById);
 router.patch("/flash-sales/:id", updateAdminFlashSale);
 router.patch("/flash-sales/:id/status", toggleAdminFlashSaleStatus);
 router.delete("/flash-sales/:id", deleteAdminFlashSale);
+
+// 13. Indian Shipping & PIN Serviceability Management
+router.get("/shipping/postal-codes", getAdminPostalCodes);
+router.post("/shipping/postal-codes", upsertAdminPostalCode);
+router.delete("/shipping/postal-codes/:id", deleteAdminPostalCode);
 
 export default router;
 

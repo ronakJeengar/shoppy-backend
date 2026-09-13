@@ -85,6 +85,25 @@ const statusHistorySchema = new Schema(
   { _id: false }
 );
 
+const shippingDetailsSnapshotSchema = new Schema(
+  {
+    method: { type: String, default: "STANDARD" },
+    methodName: { type: String, default: "Standard Delivery" },
+    shippingAmount: { type: Number, default: 0 },
+    shippingZone: { type: String, default: "NATIONAL" },
+    deliveryEstimate: {
+      minDays: { type: Number, default: 3 },
+      maxDays: { type: Number, default: 5 },
+      formattedWindow: { type: String, default: "3–5 business days" },
+      estimatedDeliveryDate: { type: String, default: "" },
+    },
+    destinationPinCode: { type: String, default: "" },
+    destinationState: { type: String, default: "" },
+    isFreeShipping: { type: Boolean, default: false },
+  },
+  { _id: false }
+);
+
 const orderSchema = new Schema(
   {
     orderNumber: {
@@ -115,6 +134,10 @@ const orderSchema = new Schema(
       type: String,
       enum: ["STANDARD", "EXPRESS"],
       default: "STANDARD",
+    },
+    shippingDetails: {
+      type: shippingDetailsSnapshotSchema,
+      default: () => ({}),
     },
     subtotal: {
       type: Number,

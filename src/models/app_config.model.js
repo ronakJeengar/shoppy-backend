@@ -74,6 +74,16 @@ const appConfigSchema = new Schema(
         type: [String],
         default: ["STANDARD", "EXPRESS", "OVERNIGHT"],
       },
+      shipping: {
+        freeShippingThreshold: { type: Number, default: 999 },
+        defaultShippingFee: { type: Number, default: 49 },
+        expressShippingFee: { type: Number, default: 99 },
+        remoteShippingSurcharge: { type: Number, default: 50 },
+        standardDeliveryMinDays: { type: Number, default: 3 },
+        standardDeliveryMaxDays: { type: Number, default: 5 },
+        expressDeliveryMinDays: { type: Number, default: 1 },
+        expressDeliveryMaxDays: { type: Number, default: 2 },
+      },
     },
     ui: {
       homeSections: {
