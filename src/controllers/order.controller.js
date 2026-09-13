@@ -461,6 +461,22 @@ export const updateOrderStatus = asyncHandler(async (req, res) => {
       }
     }
 
+    // If delivered, automatically mark pending COD payments as COMPLETED (collected on delivery)
+    if (targetStatus === "DELIVERED") {
+      if (order.payment) {
+        const payment = await Payment.findById(order.payment);
+        if (payment && payment.paymentMethod === "COD" && payment.status === "PENDING") {
+          payment.status = "COMPLETED";
+          payment.metadata = {
+            ...(payment.metadata || {}),
+            collectedAt: new Date(),
+            collectionNote: note ? note.trim() : "Payment collected upon delivery",
+          };
+          await payment.save();
+        }
+      }
+    }
+
     await order.save();
 
     let notifType = "SYSTEM";
@@ -496,6 +512,19 @@ export const updateOrderStatus = asyncHandler(async (req, res) => {
     cachedOrder.status = targetStatus;
     if (carrier) cachedOrder.carrier = carrier.trim();
     if (trackingNumber) cachedOrder.trackingNumber = trackingNumber.trim();
+
+    if (targetStatus === "DELIVERED" && cachedOrder.payment) {
+      if (
+        (cachedOrder.payment.paymentMethod === "COD" || cachedOrder.payment.provider === "COD") &&
+        cachedOrder.payment.status === "PENDING"
+      ) {
+        cachedOrder.payment.status = "COMPLETED";
+        cachedOrder.payment.metadata = {
+          ...(cachedOrder.payment.metadata || {}),
+          collectedAt: new Date(),
+        };
+      }
+    }
 
     return res
       .status(200)

@@ -44,6 +44,13 @@ export const verifyPayment = asyncHandler(async (req, res) => {
       throw new ApiError(404, "Payment transaction not found or unauthorized");
     }
 
+    if (payment.paymentMethod === "COD") {
+      throw new ApiError(
+        400,
+        "Cash on Delivery orders cannot be verified via digital payment gateway. Payment is collected upon delivery."
+      );
+    }
+
     if (payment.status === "COMPLETED") {
       const order = await Order.findById(payment.order);
       return res.status(200).json(
@@ -93,6 +100,13 @@ export const verifyPayment = asyncHandler(async (req, res) => {
   }
 
   // Offline / Test Fallback
+  if (transactionId && transactionId.toLowerCase().includes("cod")) {
+    throw new ApiError(
+      400,
+      "Cash on Delivery orders cannot be verified via digital payment gateway. Payment is collected upon delivery."
+    );
+  }
+
   return res.status(200).json(
     new ApiResponse(
       200,

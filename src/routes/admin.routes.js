@@ -63,7 +63,11 @@ import {
   upsertAdminPostalCode,
   deleteAdminPostalCode,
 } from "../controllers/shipping.controller.js";
-
+import {
+  getAdminCodConfig,
+  updateAdminCodConfig,
+  updateUserCodBlockStatus,
+} from "../controllers/cod.controller.js";
 
 const router = Router();
 
@@ -145,6 +149,11 @@ router.delete("/flash-sales/:id", deleteAdminFlashSale);
 router.get("/shipping/postal-codes", getAdminPostalCodes);
 router.post("/shipping/postal-codes", upsertAdminPostalCode);
 router.delete("/shipping/postal-codes/:id", deleteAdminPostalCode);
+
+// 14. Cash on Delivery (COD) Management
+router.get("/cod/config", getAdminCodConfig);
+router.patch("/cod/config", updateAdminCodConfig);
+router.patch("/users/:id/cod-block", updateUserCodBlockStatus);
 
 export default router;
 

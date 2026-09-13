@@ -104,6 +104,24 @@ const shippingDetailsSnapshotSchema = new Schema(
   { _id: false }
 );
 
+const codDetailsSnapshotSchema = new Schema(
+  {
+    isCod: { type: Boolean, default: false },
+    fee: { type: Number, default: 0 },
+    isFeeFree: { type: Boolean, default: false },
+    freeAboveAmount: { type: Number, default: 1499 },
+    minOrderValue: { type: Number, default: 299 },
+    maxOrderValue: { type: Number, default: 50000 },
+    eligibilitySnapshot: {
+      isEligible: { type: Boolean, default: true },
+      reasonCode: { type: String, default: "" },
+      message: { type: String, default: "" },
+      eligibleShippingZones: [{ type: String }],
+    },
+  },
+  { _id: false }
+);
+
 const orderSchema = new Schema(
   {
     orderNumber: {
@@ -138,6 +156,15 @@ const orderSchema = new Schema(
     shippingDetails: {
       type: shippingDetailsSnapshotSchema,
       default: () => ({}),
+    },
+    codFee: {
+      type: Number,
+      min: 0,
+      default: 0,
+    },
+    codDetails: {
+      type: codDetailsSnapshotSchema,
+      default: () => ({ isCod: false, fee: 0, isFeeFree: false }),
     },
     subtotal: {
       type: Number,

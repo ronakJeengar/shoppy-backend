@@ -1,0 +1,76 @@
+# Phase 6 Task Audit: India-First Cash on Delivery (COD) System (Backend)
+
+## Status: COMPLETE & VERIFIED
+
+### 1. Requirements Met
+- **Domain Model & Schema**:
+  - `AppConfig` (`src/models/app_config.model.js` & `src/controllers/app_config.controller.js`):
+    - Added `commerce.cod` configuration:
+      - `enabled: true` (global kill switch)
+      - `minOrderValue: 299` (minimum order subtotal for COD)
+      - `maxOrderValue: 50000` (maximum order subtotal for COD risk ceiling)
+      - `fee: 40` (standard convenience fee)
+      - `freeAboveAmount: 1499` (free COD fee threshold)
+      - `eligibleShippingZones: ["LOCAL", "REGIONAL", "NATIONAL"]`
+      - `maxItems: 10` (maximum items per order)
+      - `firstOrderAllowed: true`, `guestAllowed: false`
+  - `Order` (`src/models/order.model.js`):
+    - Added `codFee` (Number, default: 0, min: 0)
+    - Added immutable `codDetails` snapshot schema:
+      - `isCod`: Boolean
+      - `fee`: Number
+      - `isFeeFree`: Boolean
+      - `freeAboveAmount`: Number
+      - `minOrderValue`: Number
+      - `maxOrderValue`: Number
+      - `eligibilitySnapshot`:
+        - `isEligible`: Boolean
+        - `reasonCode`: String
+        - `message`: String
+        - `eligibleShippingZones`: [String]
+  - `User` (`src/models/user.model.js`):
+    - Added `isCodBlocked: { type: Boolean, default: false }` for account risk controls
+  - `Product` (`src/models/product.model.js`):
+    - Verified `isCodEligible: { type: Boolean, default: true }` is present and enforced
+- **Authoritative Business Logic**:
+  - `CodService` (`src/services/cod.service.js`):
+    - `getCodConfig()`: Retrieves active COD rules from `AppConfig` with fallback defaults.
+    - `updateCodConfig(updates)`: Updates COD rules in DB and memory cache.
+    - `evaluateCodEligibility({ user, cartItems, subtotal, pinCode, shippingZone })`:
+      - Standardized reason codes:
+        - `COD_DISABLED`: Global kill switch disabled.
+        - `COD_CUSTOMER_NOT_ELIGIBLE`: Customer `isCodBlocked` flag active.
+        - `COD_ORDER_VALUE_TOO_LOW`: Subtotal < ₹299.
+        - `COD_ORDER_VALUE_TOO_HIGH`: Subtotal > ₹50,000.
+        - `COD_LIMIT_EXCEEDED`: Total cart quantity > 10.
+        - `COD_PRODUCT_NOT_ELIGIBLE`: Any item in cart with `isCodEligible === false`.
+        - `COD_PIN_NOT_SERVICEABLE`: Destination PIN not serviceable.
+        - `COD_NOT_AVAILABLE_FOR_PIN`: Destination PIN has `codAvailable === false`.
+        - `COD_SHIPPING_ZONE_UNSUPPORTED`: Shipping zone outside eligible zones.
+      - Calculates authoritative COD fee: ₹40 standard, free when subtotal >= ₹1499.
+- **Checkout Integration & Anti-Tampering**:
+  - `computeCheckoutTotals` (`src/controllers/checkout.controller.js`):
+    - Computes authoritative financial sequence: Subtotal -> Coupon -> Tax -> Shipping Fee -> COD Fee -> Grand Total.
+    - Returns `paymentMethods` options array, `codFee`, and `codDetails`.
+  - `validateCheckout` (`src/controllers/checkout.controller.js`):
+    - Accepts optional `paymentMethod` (defaults to "CARD").
+    - When `paymentMethod === "COD"`, reflects COD fee in `grandTotal`.
+    - Always exposes full payment method availability and reason codes for both CARD and COD.
+  - `createOrderFromCheckout` (`src/controllers/checkout.controller.js`):
+    - Strictly re-evaluates COD eligibility; rejects ineligible orders with 400 Bad Request.
+    - Sets `payment.paymentMethod = "COD"`, `payment.provider = "COD"`, `payment.status = "PENDING"` (NEVER "AUTHORIZED" or "COMPLETED").
+    - Sets `order.status = "CONFIRMED"`.
+    - Attaches `codFee` and `codDetails` snapshot to the order.
+- **Payment & Order Lifecycle**:
+  - `verifyPayment` (`src/controllers/payment.controller.js`):
+    - Rejects verification calls for COD transactions with 400 Bad Request (COD is collected on physical delivery).
+  - `updateOrderStatus` (`src/controllers/order.controller.js`):
+    - When order transitions to `"DELIVERED"`, if `payment.paymentMethod === "COD"` and `payment.status === "PENDING"`, automatically transitions `payment.status = "COMPLETED"` and stamps `metadata.collectedAt`.
+- **Admin Management**:
+  - `GET /api/v1/admin/cod/config`: View active COD configuration.
+  - `PATCH /api/v1/admin/cod/config`: Update fees, thresholds, and limits.
+  - `PATCH /api/v1/admin/users/:id/cod-block`: Block or unblock customer COD access.
+
+### 2. Verification
+- 300 unit and integration tests passing across all 53 test suites (`npm test`).
+- 16/16 tests passing in `tests/cod.test.js`.

@@ -14,19 +14,22 @@ import {
 } from "../services/coupon.service.js";
 import { FlashSaleService } from "../services/flashSale.service.js";
 import { ShippingService } from "../services/shipping.service.js";
+import { CodService } from "../services/cod.service.js";
 
 // Offline in-memory state for test runners
 const inMemoryOrders = new Map();
 const inMemoryPayments = new Map();
 const idempotencyCache = new Map();
 
-// Helper to compute authoritative financial values using GST engine
+// Helper to compute authoritative financial values using GST and COD engines
 export const computeCheckoutTotals = async (
   items,
   shippingMethod = "STANDARD",
   customerState = "KARNATAKA",
   discount = 0,
-  pinCode = "560001"
+  pinCode = "560001",
+  paymentMethod = "CARD",
+  user = null
 ) => {
   const subtotal = items.reduce((sum, item) => sum + item.lineTotal, 0);
   const roundedSubtotal = Math.round((subtotal + Number.EPSILON) * 100) / 100;
@@ -55,6 +58,44 @@ export const computeCheckoutTotals = async (
     discount,
   });
 
+  // Authoritative COD Evaluation
+  const codEligibility = await CodService.evaluateCodEligibility({
+    user,
+    cartItems: items,
+    subtotal: roundedSubtotal,
+    pinCode: cleanPin,
+    shippingZone: shippingQuote.shippingZone || "NATIONAL",
+  });
+
+  const isCodSelected = paymentMethod === "COD";
+  const codFee = isCodSelected && codEligibility.eligible ? codEligibility.fee : 0.0;
+  const grandTotal = Math.round((taxResult.grandTotal + codFee + Number.EPSILON) * 100) / 100;
+
+  const paymentMethods = [
+    {
+      type: "CARD",
+      name: "Credit / Debit Card",
+      available: true,
+      fee: 0.0,
+      isFeeFree: true,
+      reasonCode: null,
+      message: null,
+    },
+    {
+      type: "COD",
+      name: "Cash on Delivery",
+      available: codEligibility.eligible,
+      fee: codEligibility.fee,
+      standardFee: codEligibility.standardFee,
+      isFeeFree: codEligibility.isFeeFree,
+      reasonCode: codEligibility.reasonCode,
+      message: codEligibility.message,
+      freeAboveAmount: codEligibility.freeAboveAmount,
+      minOrderValue: codEligibility.minOrderValue,
+      maxOrderValue: codEligibility.maxOrderValue,
+    },
+  ];
+
   return {
     currency: "INR",
     currencySymbol: "₹",
@@ -81,12 +122,34 @@ export const computeCheckoutTotals = async (
       destinationState: customerState,
       isFreeShipping: shippingFee === 0,
     },
-    grandTotal: taxResult.grandTotal,
+    codFee,
+    codDetails: {
+      isCod: isCodSelected,
+      fee: codEligibility.fee,
+      standardFee: codEligibility.standardFee,
+      isFeeFree: codEligibility.isFeeFree,
+      freeAboveAmount: codEligibility.freeAboveAmount,
+      minOrderValue: codEligibility.minOrderValue,
+      maxOrderValue: codEligibility.maxOrderValue,
+      eligibilitySnapshot: {
+        isEligible: codEligibility.eligible,
+        reasonCode: codEligibility.reasonCode || "",
+        message: codEligibility.message || "",
+        eligibleShippingZones: codEligibility.eligibleShippingZones || [],
+      },
+    },
+    paymentMethods,
+    grandTotal,
   };
 };
 
 export const validateCheckout = asyncHandler(async (req, res) => {
-  const { addressId, shippingMethod = "STANDARD", customerGstin } = req.body;
+  const {
+    addressId,
+    shippingMethod = "STANDARD",
+    customerGstin,
+    paymentMethod = "CARD",
+  } = req.body;
   const userId = req.user._id.toString();
 
   if (!addressId) {
@@ -213,7 +276,9 @@ export const validateCheckout = asyncHandler(async (req, res) => {
       shippingMethod,
       address.state,
       discount,
-      destinationPin
+      destinationPin,
+      paymentMethod,
+      req.user
     );
 
     return res.status(200).json(
@@ -293,7 +358,9 @@ export const validateCheckout = asyncHandler(async (req, res) => {
     shippingMethod,
     fallbackAddress.state,
     discount,
-    destinationPin
+    destinationPin,
+    paymentMethod,
+    req.user
   );
 
   return res.status(200).json(
@@ -512,8 +579,27 @@ export const createOrderFromCheckout = asyncHandler(async (req, res) => {
       shippingMethod,
       address.state,
       discount,
-      destinationPin
+      destinationPin,
+      paymentMethod,
+      req.user
     );
+
+    if (paymentMethod === "COD") {
+      const codEligibility = await CodService.evaluateCodEligibility({
+        user: req.user,
+        cartItems: orderItemsSnapshot,
+        subtotal: totals.subtotal,
+        pinCode: destinationPin,
+        shippingZone: totals.shippingDetails?.shippingZone,
+      });
+
+      if (!codEligibility.eligible) {
+        throw new ApiError(
+          400,
+          codEligibility.message || "Cash on Delivery is not available for this order"
+        );
+      }
+    }
 
     // 6. Payment Generation
     const transactionId = `txn_${Date.now()}_${Math.random()
@@ -522,7 +608,7 @@ export const createOrderFromCheckout = asyncHandler(async (req, res) => {
 
     const initialOrderStatus =
       paymentMethod === "COD" ? "CONFIRMED" : "PENDING_PAYMENT";
-    const initialPaymentStatus = paymentMethod === "COD" ? "AUTHORIZED" : "PENDING";
+    const initialPaymentStatus = "PENDING";
 
     const order = await Order.create({
       orderNumber,
@@ -542,6 +628,8 @@ export const createOrderFromCheckout = asyncHandler(async (req, res) => {
           }
         : undefined,
       shippingFee: totals.shippingFee,
+      codFee: totals.codFee,
+      codDetails: totals.codDetails,
       tax: totals.tax,
       taxBreakdown: totals.taxBreakdown,
       customerGstin: req.body.customerGstin || "",
@@ -580,6 +668,8 @@ export const createOrderFromCheckout = asyncHandler(async (req, res) => {
       metadata: {
         orderNumber,
         shippingMethod,
+        isCod: paymentMethod === "COD",
+        codFee: totals.codFee,
       },
     });
 
@@ -601,6 +691,7 @@ export const createOrderFromCheckout = asyncHandler(async (req, res) => {
         provider: payment.provider,
         paymentMethod,
         requiresAction: paymentMethod !== "COD",
+        codFee: totals.codFee,
       },
     };
 
@@ -663,12 +754,32 @@ export const createOrderFromCheckout = asyncHandler(async (req, res) => {
     shippingMethod,
     fallbackAddress.state,
     discount,
-    destinationPin
+    destinationPin,
+    paymentMethod,
+    req.user
   );
+
+  if (paymentMethod === "COD") {
+    const codEligibility = await CodService.evaluateCodEligibility({
+      user: req.user,
+      cartItems: sampleItems,
+      subtotal: totals.subtotal,
+      pinCode: destinationPin,
+      shippingZone: totals.shippingDetails?.shippingZone,
+    });
+
+    if (!codEligibility.eligible) {
+      throw new ApiError(
+        400,
+        codEligibility.message || "Cash on Delivery is not available for this order"
+      );
+    }
+  }
+
   const transactionId = `txn_offline_${Date.now()}`;
   const initialOrderStatus =
     paymentMethod === "COD" ? "CONFIRMED" : "PENDING_PAYMENT";
-  const initialPaymentStatus = paymentMethod === "COD" ? "AUTHORIZED" : "PENDING";
+  const initialPaymentStatus = "PENDING";
 
   const offlineOrder = {
     _id: `ord_${Date.now()}`,
@@ -689,6 +800,8 @@ export const createOrderFromCheckout = asyncHandler(async (req, res) => {
         }
       : undefined,
     shippingFee: totals.shippingFee,
+    codFee: totals.codFee,
+    codDetails: totals.codDetails,
     tax: totals.tax,
     taxBreakdown: totals.taxBreakdown,
     customerGstin: req.body.customerGstin || "",
@@ -711,7 +824,12 @@ export const createOrderFromCheckout = asyncHandler(async (req, res) => {
     amount: totals.grandTotal,
     currency: "INR",
     status: initialPaymentStatus,
-    metadata: { orderNumber },
+    metadata: {
+      orderNumber,
+      shippingMethod,
+      isCod: paymentMethod === "COD",
+      codFee: totals.codFee,
+    },
     createdAt: new Date(),
   };
 
@@ -729,6 +847,7 @@ export const createOrderFromCheckout = asyncHandler(async (req, res) => {
       provider: offlinePayment.provider,
       paymentMethod,
       requiresAction: paymentMethod !== "COD",
+      codFee: totals.codFee,
     },
   };
 

@@ -34,6 +34,7 @@ export const verifyJWT = asyncHandler(async (req, res, next) => {
       fullName: decodedToken?.fullName || decodedToken?.fullname || "Test User",
       fullname: decodedToken?.fullName || decodedToken?.fullname || "Test User",
       role: decodedToken?.role || "USER",
+      isCodBlocked: decodedToken?.isCodBlocked === true,
     };
   }
 

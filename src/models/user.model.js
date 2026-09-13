@@ -46,6 +46,10 @@ const userSchema = new Schema(
         default: true,
       },
     },
+    isCodBlocked: {
+      type: Boolean,
+      default: false,
+    },
     recentlyViewed: [
       {
         type: Schema.Types.ObjectId,

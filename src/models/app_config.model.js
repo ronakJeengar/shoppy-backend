@@ -84,6 +84,28 @@ const appConfigSchema = new Schema(
         expressDeliveryMinDays: { type: Number, default: 1 },
         expressDeliveryMaxDays: { type: Number, default: 2 },
       },
+      cod: {
+        enabled: { type: Boolean, default: true },
+        minOrderValue: { type: Number, default: 299 },
+        maxOrderValue: { type: Number, default: 50000 },
+        fee: { type: Number, default: 40 },
+        freeAboveAmount: { type: Number, default: 1499 },
+        eligibleShippingZones: {
+          type: [String],
+          default: ["LOCAL", "REGIONAL", "NATIONAL"],
+        },
+        eligibleStates: {
+          type: [String],
+          default: [],
+        },
+        eligiblePinCodes: {
+          type: [String],
+          default: [],
+        },
+        maxItems: { type: Number, default: 10 },
+        firstOrderAllowed: { type: Boolean, default: true },
+        guestAllowed: { type: Boolean, default: false },
+      },
     },
     ui: {
       homeSections: {
