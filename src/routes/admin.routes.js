@@ -50,6 +50,14 @@ import {
   toggleAdminCampaignStatus,
   deleteAdminCampaign,
 } from "../controllers/campaign.controller.js";
+import {
+  getAdminFlashSales,
+  createAdminFlashSale,
+  getAdminFlashSaleById,
+  updateAdminFlashSale,
+  toggleAdminFlashSaleStatus,
+  deleteAdminFlashSale,
+} from "../controllers/flashSale.controller.js";
 
 
 const router = Router();
@@ -119,6 +127,14 @@ router.get("/campaigns/:id", getAdminCampaignById);
 router.patch("/campaigns/:id", updateAdminCampaign);
 router.patch("/campaigns/:id/status", toggleAdminCampaignStatus);
 router.delete("/campaigns/:id", deleteAdminCampaign);
+
+// 12. Flash Sale & Lightning Deals Management
+router.get("/flash-sales", getAdminFlashSales);
+router.post("/flash-sales", createAdminFlashSale);
+router.get("/flash-sales/:id", getAdminFlashSaleById);
+router.patch("/flash-sales/:id", updateAdminFlashSale);
+router.patch("/flash-sales/:id/status", toggleAdminFlashSaleStatus);
+router.delete("/flash-sales/:id", deleteAdminFlashSale);
 
 export default router;
 

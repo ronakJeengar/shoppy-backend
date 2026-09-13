@@ -6,6 +6,7 @@ import { ApiResponse } from "../utils/apiResponse.js";
 import { asyncHandler } from "../utils/asyncHandler.js";
 import { calculateOrderTax } from "../services/tax.service.js";
 import { validateAndCalculateCoupon } from "../services/coupon.service.js";
+import { FlashSaleService } from "../services/flashSale.service.js";
 
 // In-memory test store for when MongoDB is disconnected during tests
 export const memoryCarts = new Map();
@@ -42,6 +43,43 @@ const fallbackCatalog = [
   },
 ];
 
+export const resolveCartItemsWithPromotions = async (items, now = new Date()) => {
+  const resolved = [];
+  for (const rawItem of items) {
+    if (!rawItem) continue;
+    const p = rawItem.product || rawItem;
+    if (!p) continue;
+    const productId = (p._id || p.id || rawItem.productId || "").toString();
+
+    let flashPromo = null;
+    if (productId) {
+      flashPromo = await FlashSaleService.getActiveProductFlashSale(productId, now);
+    }
+
+    const regularPrice =
+      flashPromo && typeof flashPromo.regularPrice === "number" && flashPromo.regularPrice > 0
+        ? flashPromo.regularPrice
+        : typeof p.price === "number"
+        ? p.price
+        : 0;
+    const unitPrice = flashPromo ? flashPromo.salePrice : regularPrice;
+
+    resolved.push({
+      _id: rawItem._id,
+      product: p,
+      quantity: rawItem.quantity || 1,
+      price: unitPrice,
+      salePrice: unitPrice,
+      effectivePrice: unitPrice,
+      regularPrice,
+      isFlashSale: Boolean(flashPromo),
+      flashSale: flashPromo || null,
+      maximumQuantityPerOrder: flashPromo ? flashPromo.maximumQuantityPerOrder : 99,
+    });
+  }
+  return resolved;
+};
+
 export const calculateCartSummary = (
   items,
   customerState = "KARNATAKA",
@@ -55,7 +93,18 @@ export const calculateCartSummary = (
     .map((item) => {
       const p = item.product;
       const qty = item.quantity;
-      const unitPrice = typeof p.price === "number" ? p.price : 0;
+      const regularPrice =
+        typeof item.regularPrice === "number" && item.regularPrice > 0
+          ? item.regularPrice
+          : typeof p.price === "number"
+          ? p.price
+          : 0;
+      const unitPrice =
+        typeof item.salePrice === "number"
+          ? item.salePrice
+          : typeof item.effectivePrice === "number"
+          ? item.effectivePrice
+          : regularPrice;
       const lineTotal = Math.round(unitPrice * qty * 100) / 100;
       subtotal += lineTotal;
       itemCount += qty;
@@ -67,6 +116,10 @@ export const calculateCartSummary = (
         sellerName: p.sellerName || "Official Seller",
         productImage: p.productImage || p.imageUrl || "",
         price: unitPrice,
+        regularPrice,
+        isFlashSale: Boolean(item.isFlashSale || item.flashSale),
+        flashSale: item.flashSale || null,
+        maximumQuantityPerOrder: item.maximumQuantityPerOrder || 99,
         quantity: qty,
         stock: p.stock !== undefined ? p.stock : 99,
         isAvailable: (p.stock !== undefined ? p.stock : 99) >= qty,
@@ -141,18 +194,20 @@ export const getCart = asyncHandler(async (req, res) => {
       cart = await Cart.create({ user: userId, items: [] });
     }
 
+    const resolvedItems = await resolveCartItemsWithPromotions(cart.items || []);
+
     let couponDetails = null;
-    if (cart.couponCode && cart.items && cart.items.length > 0) {
+    if (cart.couponCode && resolvedItems.length > 0) {
       try {
-        const formatted = cart.items
+        const formatted = resolvedItems
           .filter((i) => i.product)
           .map((i) => ({
             productId: i.product._id ? i.product._id.toString() : i.product,
             categoryId: i.product.category ? i.product.category.toString() : undefined,
             productName: i.product.productName || "Product",
-            price: Number(i.product.price || 0),
+            price: Number(i.salePrice || i.product.price || 0),
             quantity: Number(i.quantity || 1),
-            lineTotal: Number(i.product.price || 0) * Number(i.quantity || 1),
+            lineTotal: Number(i.salePrice || i.product.price || 0) * Number(i.quantity || 1),
             hsnCode: i.product.hsnCode || "8518",
             gstRate: i.product.gstRate !== undefined ? i.product.gstRate : 18,
             isTaxInclusive: i.product.isTaxInclusive !== undefined ? i.product.isTaxInclusive : true,
@@ -170,7 +225,7 @@ export const getCart = asyncHandler(async (req, res) => {
       }
     }
 
-    const summary = calculateCartSummary(cart.items, "KARNATAKA", couponDetails);
+    const summary = calculateCartSummary(resolvedItems, "KARNATAKA", couponDetails);
     return res.status(200).json(
       new ApiResponse(
         200,
@@ -186,18 +241,19 @@ export const getCart = asyncHandler(async (req, res) => {
     const uKey = userId.toString();
     const userCart = memoryCarts.get(uKey) || [];
     const couponCode = memoryCartCoupons.get(uKey);
+    const resolvedUserCart = await resolveCartItemsWithPromotions(userCart);
     let couponDetails = null;
 
-    if (couponCode && userCart.length > 0) {
+    if (couponCode && resolvedUserCart.length > 0) {
       try {
-        const formatted = userCart
+        const formatted = resolvedUserCart
           .filter((i) => i.product)
           .map((i) => ({
             productId: i.product._id ? i.product._id.toString() : i.product,
             productName: i.product.productName || "Product",
-            price: Number(i.product.price || 0),
+            price: Number(i.salePrice || i.product.price || 0),
             quantity: Number(i.quantity || 1),
-            lineTotal: Number(i.product.price || 0) * Number(i.quantity || 1),
+            lineTotal: Number(i.salePrice || i.product.price || 0) * Number(i.quantity || 1),
           }));
 
         couponDetails = await validateAndCalculateCoupon({
@@ -210,7 +266,7 @@ export const getCart = asyncHandler(async (req, res) => {
       }
     }
 
-    const summary = calculateCartSummary(userCart, "KARNATAKA", couponDetails);
+    const summary = calculateCartSummary(resolvedUserCart, "KARNATAKA", couponDetails);
 
     return res.status(200).json(
       new ApiResponse(
@@ -257,6 +313,13 @@ export const addItemToCart = asyncHandler(async (req, res) => {
       (item) => item.product.toString() === productId.toString()
     );
 
+    const flashPromo = await FlashSaleService.getActiveProductFlashSale(productId);
+    if (flashPromo) {
+      if (flashPromo.stockAllocated > 0 && flashPromo.stockSold >= flashPromo.stockAllocated) {
+        throw new ApiError(400, `Flash sale stock for "${product.productName}" is currently sold out.`);
+      }
+    }
+
     let newQuantity = parsedQty;
     if (existingIndex > -1) {
       newQuantity = cart.items[existingIndex].quantity + parsedQty;
@@ -264,6 +327,12 @@ export const addItemToCart = asyncHandler(async (req, res) => {
         throw new ApiError(
           400,
           `Cannot add more items. Only ${product.stock} items available in stock.`
+        );
+      }
+      if (flashPromo && newQuantity > flashPromo.maximumQuantityPerOrder) {
+        throw new ApiError(
+          400,
+          `Flash sale limit exceeded. Maximum ${flashPromo.maximumQuantityPerOrder} unit(s) of "${product.productName}" allowed per order.`
         );
       }
       cart.items[existingIndex].quantity = newQuantity;
@@ -274,12 +343,19 @@ export const addItemToCart = asyncHandler(async (req, res) => {
           `Cannot add requested quantity. Only ${product.stock} items available in stock.`
         );
       }
+      if (flashPromo && parsedQty > flashPromo.maximumQuantityPerOrder) {
+        throw new ApiError(
+          400,
+          `Flash sale limit exceeded. Maximum ${flashPromo.maximumQuantityPerOrder} unit(s) of "${product.productName}" allowed per order.`
+        );
+      }
       cart.items.push({ product: productId, quantity: parsedQty });
     }
 
     await cart.save();
     const populated = await Cart.findById(cart._id).populate("items.product");
-    const summary = calculateCartSummary(populated.items);
+    const resolvedItems = await resolveCartItemsWithPromotions(populated.items);
+    const summary = calculateCartSummary(resolvedItems);
 
     return res.status(200).json(
       new ApiResponse(
@@ -311,6 +387,8 @@ export const addItemToCart = asyncHandler(async (req, res) => {
       throw new ApiError(400, "This product is currently out of stock");
     }
 
+    const flashPromo = await FlashSaleService.getActiveProductFlashSale(productId);
+
     const existingIndex = userCart.findIndex(
       (item) => item.product._id.toString() === productId.toString()
     );
@@ -323,12 +401,24 @@ export const addItemToCart = asyncHandler(async (req, res) => {
           `Cannot add more items. Only ${product.stock} items available in stock.`
         );
       }
+      if (flashPromo && newQty > flashPromo.maximumQuantityPerOrder) {
+        throw new ApiError(
+          400,
+          `Flash sale limit exceeded. Maximum ${flashPromo.maximumQuantityPerOrder} unit(s) allowed per order.`
+        );
+      }
       userCart[existingIndex].quantity = newQty;
     } else {
       if (parsedQty > product.stock) {
         throw new ApiError(
           400,
           `Cannot add requested quantity. Only ${product.stock} items available in stock.`
+        );
+      }
+      if (flashPromo && parsedQty > flashPromo.maximumQuantityPerOrder) {
+        throw new ApiError(
+          400,
+          `Flash sale limit exceeded. Maximum ${flashPromo.maximumQuantityPerOrder} unit(s) allowed per order.`
         );
       }
       userCart.push({
@@ -339,7 +429,8 @@ export const addItemToCart = asyncHandler(async (req, res) => {
     }
 
     memoryCarts.set(uKey, userCart);
-    const summary = calculateCartSummary(userCart);
+    const resolvedUserCart = await resolveCartItemsWithPromotions(userCart);
+    const summary = calculateCartSummary(resolvedUserCart);
 
     return res.status(200).json(
       new ApiResponse(
@@ -396,12 +487,20 @@ export const updateCartItemQuantity = asyncHandler(async (req, res) => {
           `Cannot set quantity to ${parsedQty}. Only ${product.stock} items available in stock.`
         );
       }
+      const flashPromo = await FlashSaleService.getActiveProductFlashSale(productId);
+      if (flashPromo && parsedQty > flashPromo.maximumQuantityPerOrder) {
+        throw new ApiError(
+          400,
+          `Flash sale limit exceeded. Maximum ${flashPromo.maximumQuantityPerOrder} unit(s) allowed per order.`
+        );
+      }
       cart.items[itemIndex].quantity = parsedQty;
     }
 
     await cart.save();
     const populated = await Cart.findById(cart._id).populate("items.product");
-    const summary = calculateCartSummary(populated.items);
+    const resolvedItems = await resolveCartItemsWithPromotions(populated.items);
+    const summary = calculateCartSummary(resolvedItems);
 
     return res.status(200).json(
       new ApiResponse(
@@ -436,11 +535,19 @@ export const updateCartItemQuantity = asyncHandler(async (req, res) => {
           `Cannot set quantity to ${parsedQty}. Only ${product.stock} items available in stock.`
         );
       }
+      const flashPromo = await FlashSaleService.getActiveProductFlashSale(productId);
+      if (flashPromo && parsedQty > flashPromo.maximumQuantityPerOrder) {
+        throw new ApiError(
+          400,
+          `Flash sale limit exceeded. Maximum ${flashPromo.maximumQuantityPerOrder} unit(s) allowed per order.`
+        );
+      }
       userCart[itemIndex].quantity = parsedQty;
     }
 
     memoryCarts.set(uKey, userCart);
-    const summary = calculateCartSummary(userCart);
+    const resolvedUserCart = await resolveCartItemsWithPromotions(userCart);
+    const summary = calculateCartSummary(resolvedUserCart);
 
     return res.status(200).json(
       new ApiResponse(
@@ -475,7 +582,8 @@ export const removeCartItem = asyncHandler(async (req, res) => {
     const populated = cart
       ? await Cart.findById(cart._id).populate("items.product")
       : { items: [] };
-    const summary = calculateCartSummary(populated.items || []);
+    const resolvedItems = await resolveCartItemsWithPromotions(populated.items || []);
+    const summary = calculateCartSummary(resolvedItems);
 
     return res.status(200).json(
       new ApiResponse(
@@ -495,7 +603,8 @@ export const removeCartItem = asyncHandler(async (req, res) => {
       (item) => item.product._id.toString() !== productId.toString()
     );
     memoryCarts.set(uKey, userCart);
-    const summary = calculateCartSummary(userCart);
+    const resolvedUserCart = await resolveCartItemsWithPromotions(userCart);
+    const summary = calculateCartSummary(resolvedUserCart);
 
     return res.status(200).json(
       new ApiResponse(
@@ -550,15 +659,16 @@ export const applyCouponToCart = asyncHandler(async (req, res) => {
       throw new ApiError(400, "Cannot apply coupon to an empty cart", "EMPTY_CART");
     }
 
-    const formattedItems = cart.items
+    const resolvedItems = await resolveCartItemsWithPromotions(cart.items);
+    const formattedItems = resolvedItems
       .filter((i) => i.product)
       .map((i) => ({
         productId: i.product._id ? i.product._id.toString() : i.product,
         categoryId: i.product.category ? i.product.category.toString() : undefined,
         productName: i.product.productName || "Product",
-        price: Number(i.product.price || 0),
+        price: Number(i.salePrice || i.product.price || 0),
         quantity: Number(i.quantity || 1),
-        lineTotal: Number(i.product.price || 0) * Number(i.quantity || 1),
+        lineTotal: Number(i.salePrice || i.product.price || 0) * Number(i.quantity || 1),
         hsnCode: i.product.hsnCode || "8518",
         gstRate: i.product.gstRate !== undefined ? i.product.gstRate : 18,
         isTaxInclusive:
@@ -575,7 +685,7 @@ export const applyCouponToCart = asyncHandler(async (req, res) => {
     cart.couponCode = couponResult.code;
     await cart.save();
 
-    const summary = calculateCartSummary(cart.items, "KARNATAKA", couponResult);
+    const summary = calculateCartSummary(resolvedItems, "KARNATAKA", couponResult);
 
     return res.status(200).json(
       new ApiResponse(
@@ -595,14 +705,15 @@ export const applyCouponToCart = asyncHandler(async (req, res) => {
       throw new ApiError(400, "Cannot apply coupon to an empty cart", "EMPTY_CART");
     }
 
-    const formattedItems = userCart
+    const resolvedUserCart = await resolveCartItemsWithPromotions(userCart);
+    const formattedItems = resolvedUserCart
       .filter((i) => i.product)
       .map((i) => ({
         productId: i.product._id ? i.product._id.toString() : i.product,
         productName: i.product.productName || "Product",
-        price: Number(i.product.price || 0),
+        price: Number(i.salePrice || i.product.price || 0),
         quantity: Number(i.quantity || 1),
-        lineTotal: Number(i.product.price || 0) * Number(i.quantity || 1),
+        lineTotal: Number(i.salePrice || i.product.price || 0) * Number(i.quantity || 1),
       }));
 
     const couponResult = await validateAndCalculateCoupon({
@@ -613,7 +724,7 @@ export const applyCouponToCart = asyncHandler(async (req, res) => {
     });
 
     memoryCartCoupons.set(uKey, couponResult.code);
-    const summary = calculateCartSummary(userCart, "KARNATAKA", couponResult);
+    const summary = calculateCartSummary(resolvedUserCart, "KARNATAKA", couponResult);
 
     return res.status(200).json(
       new ApiResponse(
@@ -638,7 +749,8 @@ export const removeCouponFromCart = asyncHandler(async (req, res) => {
       await cart.save();
     }
     const items = cart?.items || [];
-    const summary = calculateCartSummary(items, "KARNATAKA", null);
+    const resolvedItems = await resolveCartItemsWithPromotions(items);
+    const summary = calculateCartSummary(resolvedItems, "KARNATAKA", null);
 
     return res.status(200).json(
       new ApiResponse(
@@ -654,7 +766,8 @@ export const removeCouponFromCart = asyncHandler(async (req, res) => {
     const uKey = userId.toString();
     memoryCartCoupons.delete(uKey);
     const userCart = memoryCarts.get(uKey) || [];
-    const summary = calculateCartSummary(userCart, "KARNATAKA", null);
+    const resolvedUserCart = await resolveCartItemsWithPromotions(userCart);
+    const summary = calculateCartSummary(resolvedUserCart, "KARNATAKA", null);
 
     return res.status(200).json(
       new ApiResponse(

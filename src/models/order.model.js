@@ -23,6 +23,21 @@ const orderItemSnapshotSchema = new Schema(
       type: Number,
       required: true,
     },
+    regularPrice: {
+      type: Number,
+    },
+    isFlashSale: {
+      type: Boolean,
+      default: false,
+    },
+    flashSaleId: {
+      type: Schema.Types.ObjectId,
+      ref: "FlashSale",
+    },
+    discountAmount: {
+      type: Number,
+      default: 0,
+    },
     quantity: {
       type: Number,
       required: true,

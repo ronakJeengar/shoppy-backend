@@ -12,6 +12,7 @@ import { Cart } from "../../models/cart.model.js";
 import { Wishlist } from "../../models/wishlist.model.js";
 import { Coupon } from "../../models/coupon.model.js";
 import { Campaign } from "../../models/campaign.model.js";
+import { FlashSale } from "../../models/flashSale.model.js";
 import { calculateOrderTax } from "../../services/tax.service.js";
 
 dotenv.config();
@@ -43,6 +44,7 @@ export const seedDatabase = async () => {
     Wishlist.deleteMany({}),
     Coupon.deleteMany({}),
     Campaign.deleteMany({}),
+    FlashSale.deleteMany({}),
   ]);
 
   console.log("🧹 Cleared all collections.");
@@ -1423,6 +1425,102 @@ export const seedDatabase = async () => {
 
   console.log(`🎯 Seeded ${campaignDocs.length} campaigns/banners.`);
 
+  // 10. Seed Flash Sales
+  const flashSaleDocs = await FlashSale.create([
+    {
+      name: "MEGA_MIDNIGHT_FLASH",
+      title: "⚡ Midnight Flash Sale — Up to 40% Off",
+      description:
+        "Exclusive lightning discounts on top electronics, wearables, and sound gear. Ends in 24 hours!",
+      saleType: "FLASH_SALE",
+      bannerImage:
+        "https://images.unsplash.com/photo-1505740420928-5e560c06d30e?w=1200&auto=format&fit=crop&q=80",
+      startAt: new Date(now.getTime() - 2 * 60 * 60 * 1000),
+      endAt: new Date(now.getTime() + 22 * 60 * 60 * 1000),
+      isActive: true,
+      priority: 10,
+      items: [
+        {
+          product: productDocs[0]._id, // Aura Pro Wireless Headphones
+          discountType: "FIXED_PRICE",
+          discountValue: 9999.0,
+          salePrice: 9999.0,
+          regularPrice: productDocs[0].price,
+          maximumQuantityPerOrder: 2,
+          stockAllocated: 30,
+          stockSold: 8,
+        },
+        {
+          product: productDocs[1]._id, // Titan Chronos Smartwatch
+          discountType: "FIXED_PRICE",
+          discountValue: 12999.0,
+          salePrice: 12999.0,
+          regularPrice: productDocs[1].price,
+          maximumQuantityPerOrder: 1,
+          stockAllocated: 20,
+          stockSold: 5,
+        },
+        {
+          product: productDocs[2]._id, // Lumix Bluetooth Speaker
+          discountType: "FIXED_PRICE",
+          discountValue: 3499.0,
+          salePrice: 3499.0,
+          regularPrice: productDocs[2].price,
+          maximumQuantityPerOrder: 2,
+          stockAllocated: 15,
+          stockSold: 7,
+        },
+        {
+          product: productDocs[4]._id, // SonicBeam Magnetic Power Bank
+          discountType: "FIXED_PRICE",
+          discountValue: 1299.0,
+          salePrice: 1299.0,
+          regularPrice: productDocs[4].price,
+          maximumQuantityPerOrder: 3,
+          stockAllocated: 40,
+          stockSold: 19,
+        },
+      ],
+    },
+    {
+      name: "SUPER_WEEKEND_QUICK_SALE",
+      title: "Weekend Quick Sale Preview",
+      description: "Sneak peek of massive discounts launching this upcoming weekend.",
+      saleType: "QUICK_SALE",
+      bannerImage:
+        "https://images.unsplash.com/photo-1472851294608-062f824d29cc?w=1200&auto=format&fit=crop&q=80",
+      startAt: new Date(now.getTime() + 2 * 24 * 60 * 60 * 1000),
+      endAt: new Date(now.getTime() + 4 * 24 * 60 * 60 * 1000),
+      isActive: true,
+      priority: 8,
+      items: [
+        {
+          product: productDocs[5]._id, // Ergonomic Chair
+          discountType: "PERCENTAGE",
+          discountValue: 25,
+          salePrice: 9749.0,
+          regularPrice: productDocs[5].price,
+          maximumQuantityPerOrder: 1,
+          stockAllocated: 10,
+          stockSold: 0,
+        },
+      ],
+    },
+    {
+      name: "EXPIRED_MONSOON_FLASH",
+      title: "Yesterday's Flash Sale",
+      description: "Past flash sale archive for verification.",
+      saleType: "FLASH_SALE",
+      startAt: new Date(now.getTime() - 5 * 24 * 60 * 60 * 1000),
+      endAt: new Date(now.getTime() - 1 * 24 * 60 * 60 * 1000),
+      isActive: true,
+      priority: 1,
+      items: [],
+    },
+  ]);
+
+  console.log(`⚡ Seeded ${flashSaleDocs.length} flash sales.`);
+
   return {
     categories: categoryDocs.length,
     products: productDocs.length,
@@ -1433,6 +1531,7 @@ export const seedDatabase = async () => {
     notifications: 3,
     coupons: couponDocs.length,
     campaigns: campaignDocs.length,
+    flashSales: flashSaleDocs.length,
   };
 };
 

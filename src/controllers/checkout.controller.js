@@ -12,6 +12,7 @@ import {
   validateAndCalculateCoupon,
   consumeCouponUsage,
 } from "../services/coupon.service.js";
+import { FlashSaleService } from "../services/flashSale.service.js";
 
 // Offline in-memory state for test runners
 const inMemoryOrders = new Map();
@@ -91,7 +92,42 @@ export const validateCheckout = asyncHandler(async (req, res) => {
         );
       }
 
-      const unitPrice = Number(product.price.toFixed(2));
+      // Flash sale revalidation
+      const flashPromo = await FlashSaleService.getActiveProductFlashSale(
+        product._id,
+        new Date()
+      );
+
+      let unitPrice = Number(product.price.toFixed(2));
+      let regularPrice = unitPrice;
+      let isFlashSale = false;
+      let flashSaleId = null;
+      let flashSaleDiscount = 0;
+
+      if (flashPromo) {
+        if (item.quantity > flashPromo.maximumQuantityPerOrder) {
+          throw new ApiError(
+            400,
+            `Flash sale limit exceeded for "${product.productName}". Maximum ${flashPromo.maximumQuantityPerOrder} unit(s) allowed per order.`
+          );
+        }
+        if (
+          flashPromo.stockAllocated > 0 &&
+          flashPromo.stockSold + item.quantity > flashPromo.stockAllocated
+        ) {
+          throw new ApiError(
+            400,
+            `Flash sale stock limit reached for "${product.productName}". Please adjust quantity.`
+          );
+        }
+        unitPrice = Number(flashPromo.salePrice.toFixed(2));
+        isFlashSale = true;
+        flashSaleId = flashPromo.flashSaleId;
+        flashSaleDiscount = Number(
+          ((regularPrice - unitPrice) * item.quantity).toFixed(2)
+        );
+      }
+
       const lineTotal = Number((unitPrice * item.quantity).toFixed(2));
 
       revalidatedItems.push({
@@ -100,6 +136,10 @@ export const validateCheckout = asyncHandler(async (req, res) => {
         productImage: product.productImage || "",
         sellerName: product.sellerName || "Official Store",
         unitPrice,
+        regularPrice,
+        isFlashSale,
+        flashSaleId,
+        discountAmount: flashSaleDiscount,
         quantity: item.quantity,
         lineTotal,
         hsnCode: product.hsnCode || "8518",
@@ -336,7 +376,42 @@ export const createOrderFromCheckout = asyncHandler(async (req, res) => {
         );
       }
 
-      const unitPrice = Number(product.price.toFixed(2));
+      // Flash sale revalidation at order creation
+      const flashPromo = await FlashSaleService.getActiveProductFlashSale(
+        product._id,
+        new Date()
+      );
+
+      let unitPrice = Number(product.price.toFixed(2));
+      let regularPrice = unitPrice;
+      let isFlashSale = false;
+      let flashSaleId = null;
+      let flashSaleDiscount = 0;
+
+      if (flashPromo) {
+        if (item.quantity > flashPromo.maximumQuantityPerOrder) {
+          throw new ApiError(
+            400,
+            `Flash sale limit exceeded for "${product.productName}". Maximum ${flashPromo.maximumQuantityPerOrder} unit(s) allowed per order.`
+          );
+        }
+        if (
+          flashPromo.stockAllocated > 0 &&
+          flashPromo.stockSold + item.quantity > flashPromo.stockAllocated
+        ) {
+          throw new ApiError(
+            400,
+            `Sorry, flash sale stock for "${product.productName}" is no longer available in the requested quantity.`
+          );
+        }
+        unitPrice = Number(flashPromo.salePrice.toFixed(2));
+        isFlashSale = true;
+        flashSaleId = flashPromo.flashSaleId;
+        flashSaleDiscount = Number(
+          ((regularPrice - unitPrice) * item.quantity).toFixed(2)
+        );
+      }
+
       const lineTotal = Number((unitPrice * item.quantity).toFixed(2));
 
       orderItemsSnapshot.push({
@@ -345,6 +420,10 @@ export const createOrderFromCheckout = asyncHandler(async (req, res) => {
         productImage: product.productImage || "",
         sellerName: product.sellerName || "Official Store",
         unitPrice,
+        regularPrice,
+        isFlashSale,
+        flashSaleId,
+        discountAmount: flashSaleDiscount,
         quantity: item.quantity,
         lineTotal,
         hsnCode: product.hsnCode || "8518",
@@ -423,6 +502,17 @@ export const createOrderFromCheckout = asyncHandler(async (req, res) => {
     // Authoritative atomic consumption of coupon usage
     if (couponResult) {
       await consumeCouponUsage(couponResult.code, req.user._id);
+    }
+
+    // Atomically record flash sale stock sold
+    for (const item of orderItemsSnapshot) {
+      if (item.isFlashSale && item.flashSaleId) {
+        await FlashSaleService.recordFlashSaleStockSold(
+          item.flashSaleId,
+          item.productId,
+          item.quantity
+        );
+      }
     }
 
     const payment = await Payment.create({
