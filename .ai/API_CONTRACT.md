@@ -68,3 +68,10 @@ Base URL: `http://localhost:8000/api/v1`
 - `PATCH /admin/campaigns/:id` - Update campaign parameters with schema validation.
 - `PATCH /admin/campaigns/:id/status` - Toggle active/inactive status.
 - `DELETE /admin/campaigns/:id` - Delete campaign.
+
+## 11. GST Tax Invoices (Feature 7)
+- `GET /orders/:id/invoice` - Authoritatively issue or retrieve the immutable GST tax invoice for an order. Strictly IDOR-protected (only accessible by order owner or admin). Contains full item-level HSN & GST breakdown, seller profile, billing/shipping addresses, place of supply, INR amount in words, COD details, and payment status.
+- `GET /orders/:id/invoice/html` - Retrieve printable, styled HTML tax invoice document suitable for mobile viewing, browser printing, or PDF export.
+
+## 12. Admin Invoice Management (Feature 7)
+- `GET /admin/invoices` - List issued invoices with pagination and search by invoice number or order number. Requires ADMIN role.

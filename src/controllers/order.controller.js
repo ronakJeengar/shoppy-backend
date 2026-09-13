@@ -278,6 +278,12 @@ export const cancelOrder = asyncHandler(async (req, res) => {
     order.status = "CANCELLED";
     order.cancellationReason = reason.trim();
     order.cancelledAt = new Date();
+    if (order.invoiceStatus === "ISSUED") {
+      order.invoiceStatus = "CANCELLED";
+      if (order.invoiceSnapshot) {
+        order.invoiceSnapshot.invoiceStatus = "CANCELLED";
+      }
+    }
     order.statusHistory.push({
       status: "CANCELLED",
       timestamp: new Date(),
@@ -351,6 +357,12 @@ export const cancelOrder = asyncHandler(async (req, res) => {
     cachedOrder.status = "CANCELLED";
     cachedOrder.cancellationReason = reason.trim();
     cachedOrder.cancelledAt = new Date();
+    if (cachedOrder.invoiceStatus === "ISSUED") {
+      cachedOrder.invoiceStatus = "CANCELLED";
+      if (cachedOrder.invoiceSnapshot) {
+        cachedOrder.invoiceSnapshot.invoiceStatus = "CANCELLED";
+      }
+    }
 
     createTransactionalNotification({
       userId: cachedOrder.customer,

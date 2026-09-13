@@ -6,6 +6,10 @@ import {
   cancelOrder,
   updateOrderStatus,
 } from "../controllers/order.controller.js";
+import {
+  getOrderInvoice,
+  getOrderInvoiceHtml,
+} from "../controllers/invoice.controller.js";
 
 const router = Router();
 
@@ -14,6 +18,8 @@ router.use(verifyJWT);
 
 router.route("/").get(getUserOrders);
 router.route("/:id").get(getOrderById);
+router.route("/:id/invoice").get(getOrderInvoice);
+router.route("/:id/invoice/html").get(getOrderInvoiceHtml);
 router.route("/:id/cancel").post(cancelOrder);
 
 // Admin-only operational status transitions

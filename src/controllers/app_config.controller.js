@@ -75,6 +75,22 @@ export const DEFAULT_APP_CONFIG = {
       firstOrderAllowed: true,
       guestAllowed: false,
     },
+    seller: {
+      legalName: "Shoppy E-Commerce Private Limited",
+      tradeName: "Shoppy India",
+      address: "Block B, 4th Floor, Tech Park, Indiranagar",
+      city: "Bengaluru",
+      district: "Bengaluru Urban",
+      state: "Karnataka",
+      stateCode: "KA",
+      pinCode: "560038",
+      country: "India",
+      gstin: "29AABCU9603R1ZM",
+      pan: "AABCU9603R",
+      phone: "+91 80 4567 8900",
+      email: "billing@shoppy.in",
+      cin: "U72900KA2024PTC123456",
+    },
   },
   ui: {
     homeSections: [

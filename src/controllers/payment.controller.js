@@ -6,6 +6,7 @@ import { Product } from "../models/product.model.js";
 import { ApiError } from "../utils/apiError.js";
 import { ApiResponse } from "../utils/apiResponse.js";
 import { asyncHandler } from "../utils/asyncHandler.js";
+import { InvoiceService } from "../services/invoice.service.js";
 
 const WEBHOOK_SECRET =
   process.env.PAYMENT_WEBHOOK_SECRET ||
@@ -87,6 +88,24 @@ export const verifyPayment = asyncHandler(async (req, res) => {
     const order = await Order.findById(payment.order);
     if (order) {
       order.status = "CONFIRMED";
+      try {
+        const sellerConfig = await InvoiceService.getSellerDetails();
+        const invoiceNumber = order.invoiceNumber || (await InvoiceService.generateNextInvoiceNumber());
+        const invoiceDate = order.invoiceDate || new Date();
+        const snapshot = InvoiceService.buildInvoiceSnapshot({
+          order,
+          sellerConfig,
+          invoiceNumber,
+          invoiceDate,
+          payment,
+        });
+        order.invoiceNumber = invoiceNumber;
+        order.invoiceDate = invoiceDate;
+        order.invoiceStatus = "ISSUED";
+        order.invoiceSnapshot = snapshot;
+      } catch (err) {
+        // Non-fatal
+      }
       await order.save();
     }
 

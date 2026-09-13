@@ -15,6 +15,7 @@ import {
 import { FlashSaleService } from "../services/flashSale.service.js";
 import { ShippingService } from "../services/shipping.service.js";
 import { CodService } from "../services/cod.service.js";
+import { InvoiceService } from "../services/invoice.service.js";
 
 // Offline in-memory state for test runners
 const inMemoryOrders = new Map();
@@ -528,6 +529,8 @@ export const createOrderFromCheckout = asyncHandler(async (req, res) => {
         productName: product.productName,
         productImage: product.productImage || "",
         sellerName: product.sellerName || "Official Store",
+        sku: product.sku || `SKU-${product._id.toString().slice(-6).toUpperCase()}`,
+        mrp: product.mrp || regularPrice,
         unitPrice,
         regularPrice,
         isFlashSale,
@@ -674,6 +677,28 @@ export const createOrderFromCheckout = asyncHandler(async (req, res) => {
     });
 
     order.payment = payment._id;
+
+    if (initialOrderStatus === "CONFIRMED") {
+      try {
+        const sellerConfig = await InvoiceService.getSellerDetails();
+        const invoiceNumber = await InvoiceService.generateNextInvoiceNumber();
+        const invoiceDate = new Date();
+        const snapshot = InvoiceService.buildInvoiceSnapshot({
+          order,
+          sellerConfig,
+          invoiceNumber,
+          invoiceDate,
+          payment,
+        });
+        order.invoiceNumber = invoiceNumber;
+        order.invoiceDate = invoiceDate;
+        order.invoiceStatus = "ISSUED";
+        order.invoiceSnapshot = snapshot;
+      } catch (err) {
+        // Non-fatal, invoice will be generated on demand
+      }
+    }
+
     await order.save();
 
     // 7. Clear User's Cart
@@ -834,6 +859,28 @@ export const createOrderFromCheckout = asyncHandler(async (req, res) => {
   };
 
   offlineOrder.payment = offlinePayment._id;
+
+  if (initialOrderStatus === "CONFIRMED") {
+    try {
+      const sellerConfig = await InvoiceService.getSellerDetails();
+      const invoiceNumber = await InvoiceService.generateNextInvoiceNumber();
+      const invoiceDate = new Date();
+      const snapshot = InvoiceService.buildInvoiceSnapshot({
+        order: offlineOrder,
+        sellerConfig,
+        invoiceNumber,
+        invoiceDate,
+        payment: offlinePayment,
+      });
+      offlineOrder.invoiceNumber = invoiceNumber;
+      offlineOrder.invoiceDate = invoiceDate;
+      offlineOrder.invoiceStatus = "ISSUED";
+      offlineOrder.invoiceSnapshot = snapshot;
+    } catch (err) {
+      // Non-fatal
+    }
+  }
+
   inMemoryOrders.set(offlineOrder._id, offlineOrder);
   inMemoryPayments.set(transactionId, offlinePayment);
 

@@ -68,6 +68,7 @@ import {
   updateAdminCodConfig,
   updateUserCodBlockStatus,
 } from "../controllers/cod.controller.js";
+import { getAdminInvoices } from "../controllers/invoice.controller.js";
 
 const router = Router();
 
@@ -154,6 +155,9 @@ router.delete("/shipping/postal-codes/:id", deleteAdminPostalCode);
 router.get("/cod/config", getAdminCodConfig);
 router.patch("/cod/config", updateAdminCodConfig);
 router.patch("/users/:id/cod-block", updateUserCodBlockStatus);
+
+// 15. GST Invoice Management
+router.get("/invoices", getAdminInvoices);
 
 export default router;
 

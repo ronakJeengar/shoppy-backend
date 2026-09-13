@@ -106,6 +106,22 @@ const appConfigSchema = new Schema(
         firstOrderAllowed: { type: Boolean, default: true },
         guestAllowed: { type: Boolean, default: false },
       },
+      seller: {
+        legalName: { type: String, default: "Shoppy E-Commerce Private Limited" },
+        tradeName: { type: String, default: "Shoppy India" },
+        address: { type: String, default: "Block B, 4th Floor, Tech Park, Indiranagar" },
+        city: { type: String, default: "Bengaluru" },
+        district: { type: String, default: "Bengaluru Urban" },
+        state: { type: String, default: "Karnataka" },
+        stateCode: { type: String, default: "KA" },
+        pinCode: { type: String, default: "560038" },
+        country: { type: String, default: "India" },
+        gstin: { type: String, default: "29AABCU9603R1ZM" },
+        pan: { type: String, default: "AABCU9603R" },
+        phone: { type: String, default: "+91 80 4567 8900" },
+        email: { type: String, default: "billing@shoppy.in" },
+        cin: { type: String, default: "U72900KA2024PTC123456" },
+      },
     },
     ui: {
       homeSections: {

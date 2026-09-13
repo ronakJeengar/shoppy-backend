@@ -19,6 +19,26 @@ const orderItemSnapshotSchema = new Schema(
       type: String,
       default: "Official Store",
     },
+    sku: {
+      type: String,
+      default: "",
+    },
+    hsnCode: {
+      type: String,
+      default: "8518",
+    },
+    gstRate: {
+      type: Number,
+      default: 18,
+    },
+    isTaxInclusive: {
+      type: Boolean,
+      default: true,
+    },
+    mrp: {
+      type: Number,
+      default: 0,
+    },
     unitPrice: {
       type: Number,
       required: true,
@@ -43,12 +63,48 @@ const orderItemSnapshotSchema = new Schema(
       required: true,
       min: 1,
     },
+    taxableAmount: {
+      type: Number,
+      default: 0,
+    },
+    cgst: {
+      type: Number,
+      default: 0,
+    },
+    sgst: {
+      type: Number,
+      default: 0,
+    },
+    igst: {
+      type: Number,
+      default: 0,
+    },
     lineTotal: {
       type: Number,
       required: true,
     },
   },
   { _id: true }
+);
+
+const billingAddressSnapshotSchema = new Schema(
+  {
+    fullName: { type: String, required: true },
+    phone: { type: String, required: true },
+    addressLine1: { type: String, default: "" },
+    addressLine2: { type: String, default: "" },
+    streetAddress: { type: String, required: true },
+    city: { type: String, required: true },
+    state: { type: String, required: true },
+    stateCode: { type: String, default: "" },
+    postalCode: { type: String, required: true },
+    pinCode: { type: String },
+    district: { type: String, default: "" },
+    landmark: { type: String, default: "" },
+    country: { type: String, default: "IN" },
+    gstin: { type: String, default: "" },
+  },
+  { _id: false }
 );
 
 const shippingAddressSnapshotSchema = new Schema(
@@ -148,6 +204,9 @@ const orderSchema = new Schema(
       type: shippingAddressSnapshotSchema,
       required: true,
     },
+    billingAddress: {
+      type: billingAddressSnapshotSchema,
+    },
     shippingMethod: {
       type: String,
       enum: ["STANDARD", "EXPRESS"],
@@ -244,6 +303,24 @@ const orderSchema = new Schema(
       ],
       default: "PENDING_PAYMENT",
       index: true,
+    },
+    invoiceNumber: {
+      type: String,
+      unique: true,
+      sparse: true,
+      index: true,
+    },
+    invoiceDate: {
+      type: Date,
+    },
+    invoiceStatus: {
+      type: String,
+      enum: ["NOT_ISSUED", "ISSUED", "CANCELLED"],
+      default: "NOT_ISSUED",
+      index: true,
+    },
+    invoiceSnapshot: {
+      type: Schema.Types.Mixed,
     },
     payment: {
       type: Schema.Types.ObjectId,
