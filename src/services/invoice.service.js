@@ -120,13 +120,20 @@ export class InvoiceService {
   /**
    * Authoritatively build an immutable invoice object from an order snapshot.
    */
-  static buildInvoiceSnapshot({
-    order,
-    sellerConfig,
-    invoiceNumber,
-    invoiceDate = new Date(),
-    payment = null,
-  }) {
+  static buildInvoiceSnapshot(optionsOrOrder, optionalSellerConfig = null, optionalInvoiceNumber = null) {
+    let order, sellerConfig, invoiceNumber, invoiceDate, payment;
+    if (optionsOrOrder && optionsOrOrder.order) {
+      ({ order, sellerConfig, invoiceNumber, invoiceDate = new Date(), payment = null } = optionsOrOrder);
+    } else {
+      order = optionsOrOrder || {};
+      sellerConfig = optionalSellerConfig;
+      invoiceNumber = optionalInvoiceNumber;
+      invoiceDate = new Date();
+      payment = order?.payment || null;
+    }
+    sellerConfig = sellerConfig || DEFAULT_APP_CONFIG.commerce.seller;
+    invoiceNumber = invoiceNumber || `INV-${order?.orderNumber || Date.now()}`;
+
     const originState = (sellerConfig.state || "KARNATAKA").trim().toUpperCase();
     const destinationState = (
       order.shippingAddress?.state ||
@@ -303,8 +310,14 @@ export class InvoiceService {
     };
 
     // 4. Payment metadata
-    const paymentMethod = payment?.paymentMethod || order.payment?.paymentMethod || (order.codFee > 0 ? "COD" : "CARD");
-    const paymentStatus = payment?.status || order.payment?.status || (paymentMethod === "COD" ? "PENDING" : "COMPLETED");
+    const paymentMethod =
+      payment?.paymentMethod ||
+      order.payment?.paymentMethod ||
+      (order.emiDetails?.isEmi ? "EMI" : (order.codFee > 0 ? "COD" : "CARD"));
+    const paymentStatus =
+      payment?.status ||
+      order.payment?.status ||
+      ((paymentMethod === "COD" || paymentMethod === "EMI") ? "PENDING" : "COMPLETED");
 
     return {
       invoiceNumber,
@@ -347,11 +360,27 @@ export class InvoiceService {
         isCod: paymentMethod === "COD",
         fee: codFee,
       },
+      emi: order.emiDetails?.isEmi
+        ? {
+            isEmi: true,
+            provider: order.emiDetails.provider,
+            providerCode: order.emiDetails.providerCode,
+            tenureMonths: order.emiDetails.tenureMonths,
+            interestRate: order.emiDetails.interestRate,
+            processingFee: order.emiDetails.processingFee,
+            processingFeeType: order.emiDetails.processingFeeType,
+            principal: order.emiDetails.principal,
+            monthlyInstallment: order.emiDetails.monthlyInstallment,
+            totalInterest: order.emiDetails.totalInterest,
+            totalPayable: order.emiDetails.totalPayable,
+            isNoCost: order.emiDetails.isNoCost,
+          }
+        : null,
       payment: {
         method: paymentMethod,
         status: paymentStatus,
         transactionId: payment?.transactionId || order.payment?.transactionId || "",
-        provider: payment?.provider || order.payment?.provider || (paymentMethod === "COD" ? "COD" : "SIMULATED"),
+        provider: payment?.provider || order.payment?.provider || (paymentMethod === "COD" ? "COD" : (paymentMethod === "EMI" ? "EMI" : "SIMULATED")),
       },
       totals,
     };
@@ -586,6 +615,7 @@ export class InvoiceService {
         <p style="margin: 2px 0;"><strong>Invoice Date:</strong> ${formattedDate}</p>
         <p style="margin: 2px 0;"><strong>Order No:</strong> ${invoice.orderNumber}</p>
         <p style="margin: 2px 0;"><strong>Payment Method:</strong> ${invoice.payment.method} (${invoice.payment.status})</p>
+        ${invoice.emi?.isEmi ? `<p style="margin: 2px 0; color: #1a73e8;"><strong>EMI Facility:</strong> ${invoice.emi.provider} (${invoice.emi.tenureMonths}M @ ₹${invoice.emi.monthlyInstallment?.toFixed(2)}/mo)</p>` : ""}
       </div>
     </div>
 
@@ -655,6 +685,16 @@ export class InvoiceService {
           <strong>Amount in Words:</strong><br/>
           ${invoice.totals.amountInWords}
         </p>
+        ${invoice.emi?.isEmi ? `
+        <div style="margin-top: 10px; padding: 8px; border: 1px dashed #1a73e8; border-radius: 4px; background: #f8fafd; font-size: 11px; line-height: 1.4;">
+          <strong style="color: #1a73e8;">EMI Payment Plan Breakdown:</strong><br/>
+          Bank / Financier: <strong>${invoice.emi.provider}</strong><br/>
+          Tenure: <strong>${invoice.emi.tenureMonths} Months</strong> ${invoice.emi.isNoCost ? '<span style="color: #137333; font-weight: bold;">(No Cost EMI)</span>' : ''}<br/>
+          Monthly Installment: <strong>₹${invoice.emi.monthlyInstallment?.toFixed(2)}/mo</strong><br/>
+          Annual Interest Rate: <strong>${invoice.emi.interestRate}%</strong> (Total Interest: ₹${invoice.emi.totalInterest?.toFixed(2)})<br/>
+          Processing Fee: <strong>₹${invoice.emi.processingFee?.toFixed(2)}</strong><br/>
+          Total Payable on Loan: <strong>₹${invoice.emi.totalPayable?.toFixed(2)}</strong>
+        </div>` : ""}
       </div>
 
       <div style="width: 40%;">

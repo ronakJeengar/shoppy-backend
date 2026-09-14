@@ -16,6 +16,8 @@ import { FlashSaleService } from "../services/flashSale.service.js";
 import { ShippingService } from "../services/shipping.service.js";
 import { CodService } from "../services/cod.service.js";
 import { InvoiceService } from "../services/invoice.service.js";
+import { EmiService } from "../services/emi.service.js";
+import { EmiEligibilityService } from "../services/emiEligibility.service.js";
 
 // Offline in-memory state for test runners
 const inMemoryOrders = new Map();
@@ -71,6 +73,14 @@ export const computeCheckoutTotals = async (
   const isCodSelected = paymentMethod === "COD";
   const codFee = isCodSelected && codEligibility.eligible ? codEligibility.fee : 0.0;
   const grandTotal = Math.round((taxResult.grandTotal + codFee + Number.EPSILON) * 100) / 100;
+  const emiPrincipal = Math.round((taxResult.grandTotal + Number.EPSILON) * 100) / 100;
+
+  const emiConfig = await EmiService.getEmiConfig();
+  const emiEligibility = EmiEligibilityService.evaluateEligibility({
+    amount: emiPrincipal,
+    user,
+    emiConfig,
+  });
 
   const paymentMethods = [
     {
@@ -94,6 +104,17 @@ export const computeCheckoutTotals = async (
       freeAboveAmount: codEligibility.freeAboveAmount,
       minOrderValue: codEligibility.minOrderValue,
       maxOrderValue: codEligibility.maxOrderValue,
+    },
+    {
+      type: "EMI",
+      name: "EMI / Pay Later",
+      available: emiEligibility.eligible,
+      fee: 0.0,
+      isFeeFree: true,
+      minOrderValue: emiEligibility.minOrderValue,
+      maxOrderValue: emiEligibility.maxOrderValue,
+      reasonCode: emiEligibility.reasonCode,
+      message: emiEligibility.message,
     },
   ];
 
@@ -139,6 +160,14 @@ export const computeCheckoutTotals = async (
         eligibleShippingZones: codEligibility.eligibleShippingZones || [],
       },
     },
+    emiDetails: {
+      isEmi: paymentMethod === "EMI",
+      isEligible: emiEligibility.eligible,
+      minOrderValue: emiEligibility.minOrderValue,
+      maxOrderValue: emiEligibility.maxOrderValue,
+      reasonCode: emiEligibility.reasonCode,
+      message: emiEligibility.message,
+    },
     paymentMethods,
     grandTotal,
   };
@@ -150,6 +179,7 @@ export const validateCheckout = asyncHandler(async (req, res) => {
     shippingMethod = "STANDARD",
     customerGstin,
     paymentMethod = "CARD",
+    emiPlan,
   } = req.body;
   const userId = req.user._id.toString();
 
@@ -282,6 +312,19 @@ export const validateCheckout = asyncHandler(async (req, res) => {
       req.user
     );
 
+    let emiQuote = null;
+    if (paymentMethod === "EMI" && emiPlan?.planId && emiPlan?.tenureMonths) {
+      try {
+        emiQuote = await EmiService.validateAndCalculateSelectedPlan({
+          planId: emiPlan.planId,
+          tenureMonths: emiPlan.tenureMonths,
+          amount: totals.grandTotal,
+        });
+      } catch (err) {
+        emiQuote = null;
+      }
+    }
+
     return res.status(200).json(
       new ApiResponse(
         200,
@@ -303,6 +346,8 @@ export const validateCheckout = asyncHandler(async (req, res) => {
               }
             : null,
           couponCode: couponResult?.code || null,
+          paymentMethod,
+          emiQuote,
           ...totals,
         },
         "Checkout validated successfully"
@@ -364,6 +409,19 @@ export const validateCheckout = asyncHandler(async (req, res) => {
     req.user
   );
 
+  let emiQuote = null;
+  if (paymentMethod === "EMI" && emiPlan?.planId && emiPlan?.tenureMonths) {
+    try {
+      emiQuote = await EmiService.validateAndCalculateSelectedPlan({
+        planId: emiPlan.planId,
+        tenureMonths: emiPlan.tenureMonths,
+        amount: totals.grandTotal,
+      });
+    } catch (err) {
+      emiQuote = null;
+    }
+  }
+
   return res.status(200).json(
     new ApiResponse(
       200,
@@ -385,6 +443,8 @@ export const validateCheckout = asyncHandler(async (req, res) => {
             }
           : null,
         couponCode: couponResult?.code || null,
+        paymentMethod,
+        emiQuote,
         ...totals,
       },
       "Checkout validated successfully"
@@ -604,6 +664,24 @@ export const createOrderFromCheckout = asyncHandler(async (req, res) => {
       }
     }
 
+    let emiSnapshot = null;
+    if (paymentMethod === "EMI") {
+      const { emiPlan } = req.body;
+      if (!emiPlan || !emiPlan.planId || !emiPlan.tenureMonths) {
+        throw new ApiError(
+          400,
+          "EMI plan selection (planId and tenureMonths) is required when selecting EMI payment method",
+          "EMI_PLAN_REQUIRED"
+        );
+      }
+
+      emiSnapshot = await EmiService.validateAndCalculateSelectedPlan({
+        planId: emiPlan.planId,
+        tenureMonths: emiPlan.tenureMonths,
+        amount: totals.grandTotal,
+      });
+    }
+
     // 6. Payment Generation
     const transactionId = `txn_${Date.now()}_${Math.random()
       .toString(36)
@@ -633,6 +711,7 @@ export const createOrderFromCheckout = asyncHandler(async (req, res) => {
       shippingFee: totals.shippingFee,
       codFee: totals.codFee,
       codDetails: totals.codDetails,
+      emiDetails: emiSnapshot ? emiSnapshot : { isEmi: false },
       tax: totals.tax,
       taxBreakdown: totals.taxBreakdown,
       customerGstin: req.body.customerGstin || "",
@@ -663,16 +742,19 @@ export const createOrderFromCheckout = asyncHandler(async (req, res) => {
       order: order._id,
       user: req.user._id,
       transactionId,
-      provider: paymentMethod === "COD" ? "COD" : "SIMULATED",
+      provider: paymentMethod === "COD" ? "COD" : (paymentMethod === "EMI" ? "EMI" : "SIMULATED"),
       paymentMethod,
       amount: totals.grandTotal,
       currency: "INR",
       status: initialPaymentStatus,
+      emi: emiSnapshot || undefined,
       metadata: {
         orderNumber,
         shippingMethod,
         isCod: paymentMethod === "COD",
+        isEmi: paymentMethod === "EMI",
         codFee: totals.codFee,
+        emi: emiSnapshot || null,
       },
     });
 
@@ -717,6 +799,7 @@ export const createOrderFromCheckout = asyncHandler(async (req, res) => {
         paymentMethod,
         requiresAction: paymentMethod !== "COD",
         codFee: totals.codFee,
+        emi: emiSnapshot || null,
       },
     };
 
@@ -801,6 +884,24 @@ export const createOrderFromCheckout = asyncHandler(async (req, res) => {
     }
   }
 
+  let emiSnapshot = null;
+  if (paymentMethod === "EMI") {
+    const { emiPlan } = req.body;
+    if (!emiPlan || !emiPlan.planId || !emiPlan.tenureMonths) {
+      throw new ApiError(
+        400,
+        "EMI plan selection (planId and tenureMonths) is required when selecting EMI payment method",
+        "EMI_PLAN_REQUIRED"
+      );
+    }
+
+    emiSnapshot = await EmiService.validateAndCalculateSelectedPlan({
+      planId: emiPlan.planId,
+      tenureMonths: emiPlan.tenureMonths,
+      amount: totals.grandTotal,
+    });
+  }
+
   const transactionId = `txn_offline_${Date.now()}`;
   const initialOrderStatus =
     paymentMethod === "COD" ? "CONFIRMED" : "PENDING_PAYMENT";
@@ -827,11 +928,13 @@ export const createOrderFromCheckout = asyncHandler(async (req, res) => {
     shippingFee: totals.shippingFee,
     codFee: totals.codFee,
     codDetails: totals.codDetails,
+    emiDetails: emiSnapshot ? emiSnapshot : { isEmi: false },
     tax: totals.tax,
     taxBreakdown: totals.taxBreakdown,
     customerGstin: req.body.customerGstin || "",
     totalAmount: totals.grandTotal,
     orderPrice: totals.grandTotal,
+    grandTotal: totals.grandTotal,
     currency: "INR",
     status: initialOrderStatus,
     idempotencyKey,
@@ -844,16 +947,19 @@ export const createOrderFromCheckout = asyncHandler(async (req, res) => {
     order: offlineOrder._id,
     user: userId,
     transactionId,
-    provider: paymentMethod === "COD" ? "COD" : "SIMULATED",
+    provider: paymentMethod === "COD" ? "COD" : (paymentMethod === "EMI" ? "EMI" : "SIMULATED"),
     paymentMethod,
     amount: totals.grandTotal,
     currency: "INR",
     status: initialPaymentStatus,
+    emi: emiSnapshot || undefined,
     metadata: {
       orderNumber,
       shippingMethod,
       isCod: paymentMethod === "COD",
+      isEmi: paymentMethod === "EMI",
       codFee: totals.codFee,
+      emi: emiSnapshot || null,
     },
     createdAt: new Date(),
   };
@@ -895,6 +1001,7 @@ export const createOrderFromCheckout = asyncHandler(async (req, res) => {
       paymentMethod,
       requiresAction: paymentMethod !== "COD",
       codFee: totals.codFee,
+      emi: emiSnapshot || null,
     },
   };
 

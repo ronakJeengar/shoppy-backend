@@ -50,7 +50,7 @@ export const DEFAULT_APP_CONFIG = {
     originState: process.env.STORE_ORIGIN_STATE || "KARNATAKA",
     supportedGstRates: [0, 5, 12, 18, 28],
     taxInclusive: true,
-    supportedPaymentMethods: ["CARD", "UPI", "NET_BANKING", "WALLET", "COD"],
+    supportedPaymentMethods: ["CARD", "UPI", "NET_BANKING", "WALLET", "COD", "EMI"],
     supportedDeliveryMethods: ["STANDARD", "EXPRESS", "OVERNIGHT"],
     shipping: {
       freeShippingThreshold: 999,
@@ -74,6 +74,13 @@ export const DEFAULT_APP_CONFIG = {
       maxItems: 10,
       firstOrderAllowed: true,
       guestAllowed: false,
+    },
+    emi: {
+      enabled: true,
+      minOrderValue: 3000,
+      maxOrderValue: 500000,
+      defaultProcessingFee: 99,
+      defaultProcessingFeeType: "FIXED",
     },
     seller: {
       legalName: "Shoppy E-Commerce Private Limited",

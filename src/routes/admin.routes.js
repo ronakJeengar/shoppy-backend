@@ -69,6 +69,13 @@ import {
   updateUserCodBlockStatus,
 } from "../controllers/cod.controller.js";
 import { getAdminInvoices } from "../controllers/invoice.controller.js";
+import {
+  getAdminEmiPlans,
+  createAdminEmiPlan,
+  updateAdminEmiPlan,
+  toggleAdminEmiPlanStatus,
+  deleteAdminEmiPlan,
+} from "../controllers/emi.controller.js";
 
 const router = Router();
 
@@ -158,6 +165,13 @@ router.patch("/users/:id/cod-block", updateUserCodBlockStatus);
 
 // 15. GST Invoice Management
 router.get("/invoices", getAdminInvoices);
+
+// 16. EMI Plan Management
+router.get("/emi/plans", getAdminEmiPlans);
+router.post("/emi/plans", createAdminEmiPlan);
+router.patch("/emi/plans/:id", updateAdminEmiPlan);
+router.patch("/emi/plans/:id/status", toggleAdminEmiPlanStatus);
+router.delete("/emi/plans/:id", deleteAdminEmiPlan);
 
 export default router;
 

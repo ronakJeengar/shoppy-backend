@@ -178,6 +178,25 @@ const codDetailsSnapshotSchema = new Schema(
   { _id: false }
 );
 
+const emiDetailsSnapshotSchema = new Schema(
+  {
+    isEmi: { type: Boolean, default: false },
+    planId: { type: Schema.Types.ObjectId, ref: "EmiPlan" },
+    provider: { type: String, default: "" },
+    providerCode: { type: String, default: "" },
+    tenureMonths: { type: Number, default: 0 },
+    interestRate: { type: Number, default: 0 },
+    processingFee: { type: Number, default: 0 },
+    processingFeeType: { type: String, default: "FIXED" },
+    principal: { type: Number, default: 0 },
+    monthlyInstallment: { type: Number, default: 0 },
+    totalInterest: { type: Number, default: 0 },
+    totalPayable: { type: Number, default: 0 },
+    isNoCost: { type: Boolean, default: false },
+  },
+  { _id: false }
+);
+
 const orderSchema = new Schema(
   {
     orderNumber: {
@@ -224,6 +243,10 @@ const orderSchema = new Schema(
     codDetails: {
       type: codDetailsSnapshotSchema,
       default: () => ({ isCod: false, fee: 0, isFeeFree: false }),
+    },
+    emiDetails: {
+      type: emiDetailsSnapshotSchema,
+      default: () => ({ isEmi: false }),
     },
     subtotal: {
       type: Number,

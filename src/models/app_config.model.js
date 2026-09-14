@@ -68,7 +68,7 @@ const appConfigSchema = new Schema(
       taxInclusive: { type: Boolean, default: true },
       supportedPaymentMethods: {
         type: [String],
-        default: ["CARD", "UPI", "NET_BANKING", "WALLET", "COD"],
+        default: ["CARD", "UPI", "NET_BANKING", "WALLET", "COD", "EMI"],
       },
       supportedDeliveryMethods: {
         type: [String],
@@ -105,6 +105,17 @@ const appConfigSchema = new Schema(
         maxItems: { type: Number, default: 10 },
         firstOrderAllowed: { type: Boolean, default: true },
         guestAllowed: { type: Boolean, default: false },
+      },
+      emi: {
+        enabled: { type: Boolean, default: true },
+        minOrderValue: { type: Number, default: 3000 },
+        maxOrderValue: { type: Number, default: 500000 },
+        defaultProcessingFee: { type: Number, default: 99 },
+        defaultProcessingFeeType: {
+          type: String,
+          enum: ["FIXED", "PERCENTAGE"],
+          default: "FIXED",
+        },
       },
       seller: {
         legalName: { type: String, default: "Shoppy E-Commerce Private Limited" },
